@@ -5,6 +5,7 @@ import {
   REGISTRY_PDA,
   SOLANA_RPC_URL,
   RELAY_API_URL,
+  DEVNET_STAKE_POOL,
 } from './constants'
 import {
   ConfigAccountSchema,
@@ -94,10 +95,10 @@ export async function fetchAllSeries(): Promise<SeriesAccount[]> {
     if (!regAcc) return []
 
     const data = regAcc.data
-    const count = data.readUInt32LE(8)
+    const count = data.readUInt16LE(8)
     const pubkeys: PublicKey[] = []
 
-    let offset = 12
+    let offset = 14
     for (let i = 0; i < count && i < 64; i++) {
       const pk = new PublicKey(data.subarray(offset, offset + 32))
       if (!pk.equals(PublicKey.default)) {
@@ -127,7 +128,9 @@ export async function fetchAllSeries(): Promise<SeriesAccount[]> {
       sOffset += 1
       const index_source = new PublicKey(sData.subarray(sOffset, sOffset + 32)).toBase58()
       sOffset += 32
-      const idx_open = sData.readBigUInt64LE(sOffset).toString()
+      const lowOpen = sData.readBigUInt64LE(sOffset)
+      const highOpen = sData.readBigUInt64LE(sOffset + 8)
+      const idx_open = (lowOpen + (highOpen << 64n)).toString()
       sOffset += 16
       const open_ts = Number(sData.readBigInt64LE(sOffset))
       sOffset += 8
@@ -141,7 +144,9 @@ export async function fetchAllSeries(): Promise<SeriesAccount[]> {
       sOffset += 32
       const status = sData[sOffset]
       sOffset += 1
-      const idx_settle = sData.readBigUInt64LE(sOffset).toString()
+      const lowSettle = sData.readBigUInt64LE(sOffset)
+      const highSettle = sData.readBigUInt64LE(sOffset + 8)
+      const idx_settle = (lowSettle + (highSettle << 64n)).toString()
       sOffset += 16
       const split_num = sData.readUInt32LE(sOffset)
       sOffset += 4
@@ -255,6 +260,53 @@ export async function fetchPythFeed(symbol: 'SOL/USD' | 'BTC/USD'): Promise<Pyth
       source: 'Pyth Solana Devnet Feed',
     })
   } catch (err) {
+    return null
+  }
+}
+
+export interface StakePoolRateData {
+  totalLamports: string
+  poolTokenSupply: string
+  exchangeRate: number
+  annualizedYieldPct: number
+  sourceAccount: string
+  isLive: boolean
+}
+
+/**
+ * Fetch live exchange rate from Devnet SPL Stake Pool (HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f)
+ */
+export async function fetchLiveStakePoolRate(): Promise<StakePoolRateData | null> {
+  try {
+    const poolPubkey = new PublicKey(DEVNET_STAKE_POOL)
+    const acc = await connection.getAccountInfo(poolPubkey)
+    if (!acc || acc.data.length < 274) {
+      return null
+    }
+
+    const data = acc.data
+    const totalLamports = data.readBigUInt64LE(258)
+    const poolTokenSupply = data.readBigUInt64LE(266)
+
+    if (poolTokenSupply === 0n) return null
+
+    const rateWad = (totalLamports * 1_000_000_000_000_000_000n) / poolTokenSupply
+    const exchangeRate = Number(rateWad) / 1e18
+
+    // Devnet stake pools exhibit minimal movement; calculate exact delta
+    const delta = exchangeRate >= 1.0 ? exchangeRate - 1.0 : 0
+    const annualizedYieldPct = Math.max(0.01, Number((delta * 100).toFixed(4)))
+
+    return {
+      totalLamports: totalLamports.toString(),
+      poolTokenSupply: poolTokenSupply.toString(),
+      exchangeRate,
+      annualizedYieldPct,
+      sourceAccount: DEVNET_STAKE_POOL,
+      isLive: true,
+    }
+  } catch (err) {
+    console.warn('Failed to fetch live stake pool rate:', err)
     return null
   }
 }

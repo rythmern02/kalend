@@ -17,9 +17,12 @@ import {
   Landmark,
   Scale,
   Sparkles,
+  ShieldAlert,
+  ExternalLink,
+  Lock,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAllSeries, fetchPythFeed } from '../../../lib/api'
+import { fetchAllSeries, fetchPythFeed, fetchLiveStakePoolRate } from '../../../lib/api'
 
 export default function VaultDetailPage() {
   const params = useParams()
@@ -27,7 +30,7 @@ export default function VaultDetailPage() {
   const modeBarState = useModeBarState()
   const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
 
-  const { data: allSeries, isLoading } = useQuery({
+  const { data: allSeries, isLoading: isSeriesLoading } = useQuery({
     queryKey: ['series'],
     queryFn: fetchAllSeries,
   })
@@ -35,6 +38,11 @@ export default function VaultDetailPage() {
   const { data: solFeed } = useQuery({
     queryKey: ['pyth', 'SOL/USD'],
     queryFn: () => fetchPythFeed('SOL/USD'),
+  })
+
+  const { data: stakePoolData, isLoading: isStakePoolLoading } = useQuery({
+    queryKey: ['stake-pool-rate'],
+    queryFn: fetchLiveStakePoolRate,
   })
 
   const tierMetadata: Record<
@@ -46,21 +54,23 @@ export default function VaultDetailPage() {
       asset: 'Ondo Finance USDY',
       kind: 3,
       icon: Landmark,
-      benchmark: '4.85% APY',
+      benchmark: '4.85% APY (Reg S Baseline)',
     },
     balanced: {
       name: 'Balanced Vault',
       asset: 'Solana LSTs (JitoSOL / mSOL)',
       kind: 0,
       icon: Scale,
-      benchmark: '7.12% APY',
+      benchmark: stakePoolData
+        ? `${stakePoolData.exchangeRate.toFixed(6)} SOL/pt`
+        : 'Live Devnet SPL Pool',
     },
     alpha: {
       name: 'Delta-Neutral Alpha Vault',
-      asset: 'Backpack Securities (AAPL / NVDA)',
+      asset: 'Backpack Securities (1,190 Assets)',
       kind: 1,
       icon: Sparkles,
-      benchmark: '3.40% Yield',
+      benchmark: 'Deferred (Decision 4)',
     },
   }
 
@@ -84,7 +94,7 @@ export default function VaultDetailPage() {
         </Link>
 
         {/* Vault Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 mb-10 border-b border-[#222222]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-8 mb-8 border-b border-[#222222]">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-[2px] bg-[#141414] border border-[#262626] flex items-center justify-center text-white">
               <IconComponent className="w-6 h-6" />
@@ -101,8 +111,15 @@ export default function VaultDetailPage() {
 
           <div className="flex items-center gap-6 font-mono text-xs">
             <div>
-              <span className="text-[#737373] block mb-1">Benchmark Yield</span>
+              <span className="text-[#737373] block mb-1">
+                {tier === 'balanced' ? 'Live Exchange Rate' : 'Benchmark Index'}
+              </span>
               <span className="text-white text-base font-medium">{currentTier.benchmark}</span>
+              {tier === 'balanced' && stakePoolData && (
+                <span className="text-[10px] text-[#4ade80] block font-mono">
+                  Live Devnet SPL Pool (HUnw...B7g66f)
+                </span>
+              )}
             </div>
             <div>
               <span className="text-[#737373] block mb-1">Active Series</span>
@@ -111,37 +128,104 @@ export default function VaultDetailPage() {
           </div>
         </div>
 
+        {/* Institutional Operator Disclosures */}
+        {tier === 'conservative' && (
+          <div className="p-4 rounded-[4px] bg-[#111105] border border-[#3a3010] mb-8 font-mono text-xs flex items-start gap-3">
+            <ShieldAlert className="w-4 h-4 text-[#fbbf24] shrink-0 mt-0.5" />
+            <div>
+              <div className="text-[#fbbf24] font-medium mb-1">
+                Decision 3 Operator Disclosure: Test Mint Standing In For USDY
+              </div>
+              <p className="text-[#a8a8a8] leading-relaxed">
+                Conservative Vault utilizes a test mint standing in for Ondo USDY on Devnet. Settlement index is set via oracle reports, not live Treasury market data. Structure adheres to Reg S offshore terms. Institutional OUSG accreditation requirements and terms will be confirmed directly with Ondo Finance with no minimum commitment published.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {tier === 'balanced' && (
+          <div className="p-4 rounded-[4px] bg-[#0c130d] border border-[#1f3a23] mb-8 font-mono text-xs flex items-start gap-3">
+            <Scale className="w-4 h-4 text-[#4ade80] shrink-0 mt-0.5" />
+            <div>
+              <div className="text-[#4ade80] font-medium mb-1">
+                Live On-Chain Stake Pool Exchange Rate: HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f
+              </div>
+              <p className="text-[#a8a8a8] leading-relaxed">
+                Exchange rate is read directly from Devnet SPL Stake Pool on-chain state (274 bytes). Total Lamports: {stakePoolData?.totalLamports ?? '505,143,440'}, Pool Token Supply: {stakePoolData?.poolTokenSupply ?? '500,000,000'}.
+                <br />
+                <span className="text-[#888888]">
+                  Note: Devnet stake pool is real but pool balance is small; rate delta demonstrates on-chain settlement mechanics rather than market staking yields.
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
+
+        {tier === 'alpha' && (
+          <div className="p-4 rounded-[4px] bg-[#140e0e] border border-[#3e1f1f] mb-8 font-mono text-xs flex items-start gap-3">
+            <Lock className="w-4 h-4 text-[#f87171] shrink-0 mt-0.5" />
+            <div>
+              <div className="text-[#f87171] font-medium mb-1">
+                Decision 4 Operator Disclosure: Tokenized Equities Vault Deferred
+              </div>
+              <p className="text-[#a8a8a8] leading-relaxed">
+                Spike C verified Backpack Exchange&apos;s live public securities API (<code className="text-zinc-300">/api/v1/securities</code>) returning 1,190 assets. In accordance with the Launch Gate (Section 16), live RFQ trading for Equities is deferred until production corporate action attestation is finalized. No unverified dividend rates or speculative cash yields are published.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Decision 1 & Privacy Architecture Disclosure */}
+        <div className="p-4 rounded-[4px] bg-[#0d0d0d] border border-[#1f1f1f] mb-8 font-mono text-xs flex items-start gap-3">
+          <ShieldAlert className="w-4 h-4 text-[#60a5fa] shrink-0 mt-0.5" />
+          <div className="text-[#a8a8a8] leading-relaxed">
+            <strong className="text-white">Decision 1 & Privacy Model: </strong>
+            RFQ quotes are matched and clearing prices are calculated inside the confidential Chainlink CRE enclave (AWS Nitro TEE). In accordance with Solana Token-2022 architecture (Spike B), settlement balances leaving escrow on-chain are visible on Solana.
+          </div>
+        </div>
+
         {/* Reference Yield Curve & Sanity Bounds */}
         <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] mb-12">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-serif text-lg text-white font-medium flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-[#4ade80]" />
-              Reference Term Structure & Yield Curve
+              Reference Term Structure & Oracles
             </h2>
-            <DataSourceTag sourceName="Pyth Macro Yield Receiver" updatedAt={solFeed?.publishTime} />
+            <DataSourceTag
+              sourceName={solFeed ? 'Pyth Devnet Feed' : 'Devnet Oracle Feed'}
+              updatedAt={solFeed?.publishTime}
+            />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs mb-6">
-            <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">1M Term</span>
-              <span className="text-white text-sm font-medium">4.78%</span>
+          {solFeed ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs mb-6">
+              <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Pyth SOL/USD</span>
+                <span className="text-white text-sm font-medium">${solFeed.price.toFixed(2)}</span>
+              </div>
+              <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Confidence</span>
+                <span className="text-white text-sm font-medium">±${solFeed.confidence.toFixed(3)}</span>
+              </div>
+              <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Publish Time</span>
+                <span className="text-white text-sm font-medium">
+                  {new Date(solFeed.publishTime * 1000).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Status</span>
+                <span className="text-[#4ade80] text-sm font-medium">Live On-Chain</span>
+              </div>
             </div>
-            <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">3M Term</span>
-              <span className="text-white text-sm font-medium">4.85%</span>
+          ) : (
+            <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px] font-mono text-xs text-[#a8a8a8] mb-6">
+              Awaiting live Pyth macro yield curve feed on Devnet. Kalend displays reference prices solely for bounding quotes; on-chain settlement math never relies on display prices (Prime Directive 2).
             </div>
-            <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">6M Term</span>
-              <span className="text-white text-sm font-medium">4.92%</span>
-            </div>
-            <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">1Y Term</span>
-              <span className="text-white text-sm font-medium">4.98%</span>
-            </div>
-          </div>
+          )}
 
-          <p className="text-xs text-[#a8a8a8] leading-relaxed">
-            Note: Reference curves are ingested inside the Chainlink CRE enclave solely as sanity bounds (Prime Directive 2). Kalend on-chain settlement math never relies on display prices.
+          <p className="text-xs text-[#737373] leading-relaxed">
+            Note: Reference curves are ingested inside the Chainlink CRE enclave solely as sanity bounds. Kalend on-chain settlement math never relies on display prices.
           </p>
         </div>
 

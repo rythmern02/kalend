@@ -126,26 +126,32 @@ export function PythPriceTicker() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        {prices.map((p) => (
-          <div
-            key={p.id}
-            className="p-3 bg-black/40 border border-zinc-800/80 rounded-lg flex items-center justify-between"
-          >
-            <div>
-              <div className="text-xs font-mono font-medium text-zinc-300">{p.symbol}</div>
-              <div className="text-[10px] text-zinc-500 font-mono">±${p.conf} conf</div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-mono font-bold text-foreground">${p.price}</div>
-              <div className="text-[10px] font-mono text-emerald-400 flex items-center justify-end gap-0.5">
-                <TrendingUp className="w-2.5 h-2.5" />
-                Live On-Chain
+      {prices.length === 0 ? (
+        <div className="p-4 bg-black/40 border border-zinc-800/80 rounded-lg text-center font-mono text-xs text-zinc-500">
+          Awaiting live oracle feed from on-chain Devnet Pyth program...
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {prices.map((p) => (
+            <div
+              key={p.id}
+              className="p-3 bg-black/40 border border-zinc-800/80 rounded-lg flex items-center justify-between"
+            >
+              <div>
+                <div className="text-xs font-mono font-medium text-zinc-300">{p.symbol}</div>
+                <div className="text-[10px] text-zinc-500 font-mono">±${p.conf} conf</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-mono font-bold text-foreground">${p.price}</div>
+                <div className="text-[10px] font-mono text-emerald-400 flex items-center justify-end gap-0.5">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  Live On-Chain
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div className="p-2.5 rounded bg-zinc-900/60 border border-zinc-800 text-[10px] text-zinc-400 flex items-start gap-2">
         <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
