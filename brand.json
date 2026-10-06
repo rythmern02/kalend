@@ -1,0 +1,13 @@
+{
+  "name": "kalend",
+  "displayName": "Kalend",
+  "tagline": "Private Request-For-Quote Exchange for Dated Yield (PT/YT) on Solana, Settled via Chainlink CRE",
+  "programName": "kalend",
+  "cargoCrate": "kalend",
+  "npmScope": "@kalend",
+  "envPrefix": "KALEND_",
+  "version": "0.1.0",
+  "description": "Production-grade dated-yield exchange with confidential RFQ matching inside Chainlink CRE enclaves and Solana onchain settlement",
+  "authors": ["Kalend Engineering Team"],
+  "license": "Apache-2.0"
+}

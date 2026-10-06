@@ -1,0 +1,21 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+kalend = "KALE111111111111111111111111111111111111111"
+
+[programs.devnet]
+kalend = "KALE111111111111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/civitas-deployer.json"
+
+[scripts]
+test = "cargo test"
