@@ -6,6 +6,7 @@ pub enum IndexKind {
     StakePoolRate = 0,
     ScaledUiDividendAdjusted = 1,
     OracleIndex = 2,
+    OndoUsdyRwa = 3,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]

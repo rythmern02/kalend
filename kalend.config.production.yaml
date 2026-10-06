@@ -1,0 +1,48 @@
+# Kalend Protocol Zero-Mock Production Manifest & Tooling Config
+target_cluster: "solana-devnet"
+cluster_mode: "production-ready-devnet"
+
+rpc_endpoints:
+  primary: "https://api.devnet.solana.com"
+  backup: "https://api.mainnet-beta.solana.com" # Dual independent RPC providers for CRE consensus aggregation
+
+contract_deployments:
+  kalend_core: "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527"
+  kalend_transfer_hook: "KHook1111111111111111111111111111111111111"
+  keystone_forwarder_live: "CXsKEJcs25TQEYU2e5jZ8QTPE3ffMLZhH6BWHrdcCCB5"
+  keystone_forwarder_state: "8QoomCQyPSkJ8WopJbX9B4HyvrFzziwvJdU8hZE6DCr9"
+  keystone_forwarder_mock: "7kuEAA3mSC1Tz8gQjnvH7bKFda9xSPRRin9SZbH49cNK"
+
+live_collateral_registry:
+  tier_1_lst:
+    name: "Solana Liquid Staking (Balanced Vault)"
+    mint: "J1t96EwVvDG3hsjzy17cgUAsUf6HFm6bA79D89679D8" # Devnet JitoSOL Contract
+    mainnet_mint: "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
+    source_pool: "Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb"
+    target_apr: 7.12
+    quote_mint: "So11111111111111111111111111111111111111112" # wSOL
+
+  tier_2_rwa:
+    name: "Ondo US Dollar Yield (Conservative Vault)"
+    mint: "Ond0USDY1111111111111111111111111111111111" # Devnet Ondo USDY Mint
+    mainnet_mint: "A1KLoBrKBde8Ty9qtNQUtq3C2ortoC3u7twggz7sEto6" # Live Ondo USDY on Solana
+    rate_oracle: "0xe393441620c5d5d67710c66f4370f1a238692694b7964b4c7407519639537326" # Pyth USDY/USD Feed
+    target_apr: 4.85
+    quote_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" # USDC
+
+  tier_3_equities:
+    name: "Backpack Securities Tokenized Equities (Alpha Vault)"
+    mint: "BPackAAPL111111111111111111111111111111111" # Backpack Apple Inc. Tokenized Equity
+    data_provider: "https://api.backpack.exchange"
+    supported_symbols:
+      - "AAPL"
+      - "NVDA"
+      - "TSLA"
+    target_apr: 3.40 # Equity dividend yield capture
+    quote_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" # USDC
+
+confidentiality_layer:
+  zk_proof_program: "ZkTokenProof1111111111111111111111111111111"
+  token_extension_mode: "Token-2022 / ConfidentialTransferMint + TransferHook Enabled"
+  enclave_tee_region: "aws-nitro-us-west-2"
+  enclave_kid: "kid-rwa-production-v1"

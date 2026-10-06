@@ -1,12 +1,23 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
+import { Connection, PublicKey } from '@solana/web3.js'
 import { store, type SealedEnvelope } from './store.js'
 import { creClient } from './cre-client.js'
 import { solanaWatcher } from './solana-watcher.js'
+import { AltCrankWorker } from './alt-crank.js'
 import crypto from 'crypto'
 
 const app = new Hono()
+
+const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
+const programIdStr = process.env.PROGRAM_ID || 'Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527'
+const altCrank = new AltCrankWorker({
+  connection: new Connection(rpcUrl, 'confirmed'),
+  programId: new PublicKey(programIdStr),
+  store,
+})
+altCrank.start(4000)
 
 // Enable CORS for frontend
 app.use(
@@ -147,7 +158,19 @@ app.post('/rfq/rounds/:id/trigger', async (c) => {
   return c.json({ success: result.success, result })
 })
 
-// 7. Server-Sent Events (SSE) Stream for Frontend
+// 7. Execute Fill Phase 2 Crank Endpoint via Address Lookup Table (ALT)
+app.post('/rfq/rounds/:id/execute-fill', async (c) => {
+  const roundId = c.req.param('id')
+  const round = store.getRound(roundId)
+  if (!round || !round.fill_receipt) {
+    return c.json({ error: 'Round or fill_receipt not found' }, 404)
+  }
+
+  const txSig = await altCrank.executeFillWithAlt(roundId, round.fill_receipt)
+  return c.json({ success: true, round_id: roundId, tx_hash: txSig })
+})
+
+// 8. Server-Sent Events (SSE) Stream for Frontend
 app.get('/rfq/events', (c) => {
   return new Response(
     new ReadableStream({

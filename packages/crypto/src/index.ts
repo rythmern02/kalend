@@ -139,3 +139,5 @@ export function generateEnclaveKeypair() {
 export function generateWalletKeypair() {
   return ed25519.keygen()
 }
+
+export * from './zk-elgamal.js'

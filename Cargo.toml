@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "programs/kalend",
+    "programs/kalend-transfer-hook",
 ]
 resolver = "2"
 

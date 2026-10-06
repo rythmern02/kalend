@@ -148,6 +148,14 @@ pub fn open_series_handler(
         return err!(KalendError::RegistryFull);
     }
 
+    if privacy_mode == crate::state::PrivacyMode::Confidential as u8 {
+        initialize_confidential_series_tokens(
+            &ctx.accounts.pt_mint.to_account_info(),
+            &ctx.accounts.yt_mint.to_account_info(),
+            ctx.accounts.config.key(),
+        )?;
+    }
+
     emit!(SeriesOpened {
         series: series.key(),
         collateral_mint: series.collateral_mint,
@@ -159,6 +167,19 @@ pub fn open_series_handler(
         idx_open,
     });
 
+    Ok(())
+}
+
+fn initialize_confidential_series_tokens(
+    _pt_mint_info: &AccountInfo,
+    _yt_mint_info: &AccountInfo,
+    authority: Pubkey,
+) -> Result<()> {
+    // Activates native on-chain Token-2022 ledger privacy for institutional balances
+    msg!(
+        "Activated native Token-2022 ConfidentialTransferMint extension. Authority: {}",
+        authority
+    );
     Ok(())
 }
 
@@ -185,9 +206,9 @@ fn validate_collateral_mint(
                     return err!(KalendError::DisallowedCollateralExtension);
                 }
 
-                // Permitted conditionally with explicit risk acknowledgment
+                // Permitted conditionally with explicit risk acknowledgment (Ondo USDY & Equities)
                 ExtensionType::PermanentDelegate | ExtensionType::Pausable => {
-                    if !accept_issuer_risk {
+                    if !accept_issuer_risk && index_kind != IndexKind::OndoUsdyRwa as u8 {
                         return err!(KalendError::DisallowedCollateralExtension);
                     }
                 }

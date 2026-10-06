@@ -219,7 +219,9 @@ export const onHttpTriggerInTee = (
     return JSON.stringify({ status: 'no_match', reason: 'no_quotes_meet_limit_price' })
   }
 
-  // Sort descending by price; tie-break deterministically by hash(round_id || dealer)
+  // 5. Multi-Dealer Knapsack / Waterfall Matching Engine
+  // Sort eligible quotes by price descending (highest bid first for the seller)
+  // Tie-break deterministically using sha256(round_id || dealer)
   eligibleQuotes.sort((a, b) => {
     const priceA = BigInt(Math.floor(parseFloat(a.price) * 1_000_000))
     const priceB = BigInt(Math.floor(parseFloat(b.price) * 1_000_000))
@@ -231,17 +233,54 @@ export const onHttpTriggerInTee = (
     return hashA.localeCompare(hashB)
   })
 
-  const bestQuote = eligibleQuotes[0]
-  const matchedPrice = BigInt(Math.floor(parseFloat(bestQuote.price) * 1_000_000))
-  const reqSize = BigInt(req.size)
-  const dealerMaxSize = BigInt(bestQuote.max_size)
-  const assetAmount = reqSize < dealerMaxSize ? reqSize : dealerMaxSize
-  const quoteAmount = (assetAmount * matchedPrice) / 1_000_000n
+  // Greedy Knapsack Allocation: satisfy requested size across best quotes (up to 8 dealers)
+  interface TrancheFill {
+    dealer: string
+    price: bigint
+    assetAmount: bigint
+    quoteAmount: bigint
+    notAfter: number
+  }
 
-  const notAfter = Math.min(req.not_after, bestQuote.not_after)
+  const trancheFills: TrancheFill[] = []
+  let remainingAssetSize = BigInt(req.size)
+  let totalAssetMatched = 0n
+  let totalQuoteMatched = 0n
+
+  for (const quote of eligibleQuotes) {
+    if (remainingAssetSize === 0n) break
+    if (trancheFills.length >= 8) break // Max 8 fills per round cap
+
+    const qPrice = BigInt(Math.floor(parseFloat(quote.price) * 1_000_000))
+    const qMaxSize = BigInt(quote.max_size)
+
+    const fillAsset = remainingAssetSize < qMaxSize ? remainingAssetSize : qMaxSize
+    if (fillAsset <= 0n) continue
+
+    const fillQuote = (fillAsset * qPrice) / 1_000_000n
+
+    trancheFills.push({
+      dealer: quote.dealer,
+      price: qPrice,
+      assetAmount: fillAsset,
+      quoteAmount: fillQuote,
+      notAfter: Math.min(req.not_after, quote.not_after),
+    })
+
+    totalAssetMatched += fillAsset
+    totalQuoteMatched += fillQuote
+    remainingAssetSize -= fillAsset
+  }
+
+  if (trancheFills.length === 0) {
+    return JSON.stringify({ status: 'no_match', reason: 'allocation_failed' })
+  }
+
+  const primaryFill = trancheFills[0]
+  const notAfter = Math.min(...trancheFills.map((f) => f.notAfter))
   const sideByte = req.side === 'SellPT' ? 0 : 1
 
-  // 6. Build FillReport Struct
+  // 6. Build FillReport Struct for On-Chain Execution
   const fillReport = {
     kind: 1,
     version: 1,
@@ -249,9 +288,9 @@ export const onHttpTriggerInTee = (
     series: address(req.series),
     side: sideByte,
     requester: address(req.requester),
-    dealer: address(bestQuote.dealer),
-    assetAmount: assetAmount,
-    quoteAmount: quoteAmount,
+    dealer: address(primaryFill.dealer),
+    assetAmount: totalAssetMatched,
+    quoteAmount: totalQuoteMatched,
     quoteMint: address(req.quote_mint),
     notAfter: BigInt(notAfter),
   }
@@ -290,9 +329,10 @@ export const onHttpTriggerInTee = (
       status: 'matched_simulation',
       round_id: bundle.round_id,
       series: req.series,
-      asset_amount: assetAmount.toString(),
-      quote_amount: quoteAmount.toString(),
+      asset_amount: totalAssetMatched.toString(),
+      quote_amount: totalQuoteMatched.toString(),
       fill_receipt: fillReceiptPda,
+      tranche_count: trancheFills.length,
     })
   }
 

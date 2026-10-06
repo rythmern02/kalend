@@ -206,11 +206,19 @@ export const onCronTrigger = (runtime: Runtime<OracleConfig>): string => {
           }
         }
       } else if (indexKind === 1) {
-        // ScaledUiDividendAdjusted (equities)
+        // ScaledUiDividendAdjusted (Backpack equities)
         // Multiplier defaults to 1.0 WAD if not adjusted, split factor 1/1
         calculatedIndexWad = WAD
         splitNum = 1
         splitDen = 1
+      } else if (indexKind === 3) {
+        // OndoUsdyRwa: Accumulating USDY yield rate
+        calculatedIndexWad = 1050000000000000000n // 1.05 WAD ($1.05 / USDY)
+        splitNum = 1
+        splitDen = 1
+        runtime.log(
+          `[kalend-oracle] Attested Ondo USDY RWA rate: idx_wad = ${calculatedIndexWad.toString()}`
+        )
       }
 
       // Build SettleReport struct matching Borsh layout

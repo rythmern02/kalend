@@ -163,6 +163,32 @@
       ],
       "accounts": [
         {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "requester"
+        },
+        {
+          "name": "dealer"
+        },
+        {
+          "name": "asset_mint"
+        },
+        {
+          "name": "quote_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "asset_token_program"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
           "name": "fill_receipt",
           "writable": true,
           "pda": {
@@ -190,12 +216,6 @@
             "requester_asset_escrow",
             "dealer_quote_escrow"
           ]
-        },
-        {
-          "name": "requester"
-        },
-        {
-          "name": "dealer"
         },
         {
           "name": "allow_entry_requester",
@@ -322,26 +342,6 @@
             "Dealer destination account for asset currency (PT or YT)"
           ],
           "writable": true
-        },
-        {
-          "name": "asset_mint"
-        },
-        {
-          "name": "quote_mint",
-          "relations": [
-            "series"
-          ]
-        },
-        {
-          "name": "asset_token_program"
-        },
-        {
-          "name": "quote_token_program"
-        },
-        {
-          "name": "caller",
-          "writable": true,
-          "signer": true
         }
       ],
       "args": []
@@ -526,9 +526,62 @@
         {
           "name": "escrow_token",
           "docs": [
-            "Escrow token account owned by Escrow PDA"
+            "Escrow token account owned by Escrow PDA (canonical ATA)"
           ],
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "owner_token",
@@ -1630,9 +1683,62 @@
         {
           "name": "escrow_token",
           "docs": [
-            "Escrow token account owned by Escrow PDA"
+            "Escrow token account owned by Escrow PDA (canonical ATA)"
           ],
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "owner_token",
