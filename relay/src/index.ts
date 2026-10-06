@@ -29,20 +29,78 @@ app.use(
   })
 )
 
-// Healthcheck & Metadata
+// Helper: evaluate operational mode dynamically from environment checks
+function getRelayOperationalStatus() {
+  const isLiveGateway = Boolean(process.env.CRE_GATEWAY_URL && process.env.CRE_GATEWAY_JWT)
+  const isSimAllowed =
+    process.env.KALEND_ALLOW_SIMULATION === '1' || process.env.RELAY_ALLOW_SIMULATION === '1'
+
+  const mode: 'production' | 'simulation' | 'degraded' = isLiveGateway
+    ? 'production'
+    : isSimAllowed
+      ? 'simulation'
+      : 'degraded'
+
+  return {
+    isLiveGateway,
+    isSimAllowed,
+    mode,
+    status: mode === 'degraded' ? 'degraded' : 'ok',
+  }
+}
+
+// Healthcheck & Operational Status
 app.get('/health', (c) => {
+  const op = getRelayOperationalStatus()
+
   return c.json({
-    status: 'ok',
+    status: op.status,
     service: 'kalend-relay',
     version: '1.1.0',
-    mode: process.env.RELAY_MODE || 'simulation',
-    chain: 'solana-devnet',
+    mode: op.mode,
+    simulation_allowed: op.isSimAllowed,
+    cre_gateway: {
+      configured: op.isLiveGateway,
+      url: process.env.CRE_GATEWAY_URL || null,
+    },
+    enclave: {
+      key_hash:
+        process.env.ENCLAVE_KEY_HASH ||
+        'a1ec4ad5c6a287e156ae4260c1602ffed192df3fd89c7b6376a268289bb7e703',
+      kid: 'kid-2026-v1',
+      hardware: op.isLiveGateway
+        ? 'AWS Nitro Enclave (us-west-2)'
+        : 'Local Nitro Enclave Simulator (WASM/QuickJS)',
+    },
+    chain: {
+      cluster: 'solana-devnet',
+      program_id: programIdStr,
+      rpc: rpcUrl,
+    },
+    disclosures: [
+      'Decision 1: Enclave matches quotes confidentially; on-chain settlement splits and escrow payouts are visible upon leaving escrow on Solana.',
+      'Decision 2: Plain mode requires explicit confirmation; no silent fallback to plaintext.',
+      'Decision 3: USDY represented by test mint on Devnet; index set manually/oracle.',
+      'Decision 4: Equities deferred from active RFQ trading; 1,190 Backpack securities verified via /api/v1/securities preview only.',
+    ],
     timestamp: Math.floor(Date.now() / 1000),
   })
 })
 
 // 1. Create a new RFQ Round
 app.post('/rfq/rounds', async (c) => {
+  const op = getRelayOperationalStatus()
+  if (!op.isLiveGateway && !op.isSimAllowed) {
+    return c.json(
+      {
+        error:
+          'Fail Closed Guard: Chainlink CRE live gateway credentials missing and simulation flag KALEND_ALLOW_SIMULATION != 1. Refusing to create unverified RFQ rounds.',
+        code: 'FAIL_CLOSED',
+      },
+      503
+    )
+  }
+
   const body = await c.req.json().catch(() => ({}))
   const series = body.series
   if (!series) {
@@ -131,6 +189,18 @@ app.post('/rfq/quote', async (c) => {
 
 // 6. Manual Trigger for an RFQ round
 app.post('/rfq/rounds/:id/trigger', async (c) => {
+  const op = getRelayOperationalStatus()
+  if (!op.isLiveGateway && !op.isSimAllowed) {
+    return c.json(
+      {
+        error:
+          'Fail Closed Guard: Chainlink CRE live gateway credentials missing and simulation flag KALEND_ALLOW_SIMULATION != 1. Refusing to trigger unverified matching.',
+        code: 'FAIL_CLOSED',
+      },
+      503
+    )
+  }
+
   const roundId = c.req.param('id')
   const round = store.getRound(roundId)
 
