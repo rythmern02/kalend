@@ -3,7 +3,7 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 use crate::errors::KalendError;
-use crate::state::{Config, Escrow, Series};
+use crate::state::{Config, Escrow, Series, AllowEntry, roles};
 use crate::events::{EscrowLocked, EscrowWithdrawn};
 
 #[derive(Accounts)]
@@ -16,6 +16,13 @@ pub struct LockEscrow<'info> {
     pub config: Account<'info, Config>,
 
     pub series: Account<'info, Series>,
+
+    /// AllowEntry validating the user has Requester, Dealer, or Strip permissions
+    #[account(
+        seeds = [AllowEntry::SEED, owner.key().as_ref()],
+        bump = allow_entry.bump
+    )]
+    pub allow_entry: Account<'info, AllowEntry>,
 
     #[account(
         init_if_needed,
@@ -105,6 +112,11 @@ pub fn lock_escrow(
     }
     if ctx.accounts.config.paused {
         return err!(KalendError::ProtocolPaused);
+    }
+
+    let now = Clock::get()?.unix_timestamp;
+    if !ctx.accounts.allow_entry.has_role(roles::REQUESTER | roles::DEALER | roles::STRIP, now) {
+        return err!(KalendError::MissingRole);
     }
 
     let escrow = &mut ctx.accounts.escrow;

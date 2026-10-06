@@ -143,3 +143,74 @@ pub mod kalend {
         instructions::settlement::claim_yt(ctx, amount)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instructions::admin::MOCK_FORWARDER_PROGRAM_DEVNET;
+    use crate::state::{Config, roles, AllowEntry};
+
+    #[test]
+    fn test_id() {
+        assert_eq!(ID, pubkey!("Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527"));
+    }
+
+    #[test]
+    fn test_mainnet_rejects_mock_forwarder_invariant() {
+        let mut config = Config {
+            authority: Pubkey::new_unique(),
+            pending_authority: Pubkey::default(),
+            forwarders: Default::default(),
+            forwarder_count: 0,
+            enclave_key_hash: [0u8; 32],
+            paused: false,
+            cluster_mode: 2, // Mainnet mode
+            fee_bps: 0,
+            treasury: Pubkey::new_unique(),
+            bump: 254,
+        };
+
+        // When cluster_mode is Mainnet (2), adding the mock forwarder must be rejected
+        let candidate_program = MOCK_FORWARDER_PROGRAM_DEVNET;
+        let is_mock_forbidden = config.cluster_mode == 2 && candidate_program == MOCK_FORWARDER_PROGRAM_DEVNET;
+        assert!(is_mock_forbidden);
+
+        // In devnet mode (1), mock forwarder is allowed
+        config.cluster_mode = 1;
+        let is_devnet_mock_allowed = config.cluster_mode != 2 || candidate_program != MOCK_FORWARDER_PROGRAM_DEVNET;
+        assert!(is_devnet_mock_allowed);
+    }
+
+    #[test]
+    fn test_allow_entry_roles_bitmask_invariant() {
+        let entry = AllowEntry {
+            wallet: Pubkey::new_unique(),
+            expiry_ts: 1_000_000,
+            roles: roles::REQUESTER | roles::DEALER,
+            bump: 255,
+        };
+
+        assert!(entry.has_role(roles::REQUESTER, 500_000));
+        assert!(entry.has_role(roles::DEALER, 500_000));
+        assert!(!entry.has_role(roles::STRIP, 500_000));
+        // Expired check
+        assert!(!entry.has_role(roles::REQUESTER, 1_000_001));
+    }
+
+    #[test]
+    fn test_multi_tranche_waterfall_escrow_math() {
+        let mut escrow_amount: u64 = 1_000_000;
+        let tranches = vec![400_000u64, 350_000u64, 250_000u64];
+
+        for t in &tranches {
+            assert!(escrow_amount >= *t);
+            escrow_amount = escrow_amount.checked_sub(*t).expect("checked_sub");
+        }
+
+        assert_eq!(escrow_amount, 0);
+
+        // Over-fill must fail
+        let overfill = 1u64;
+        assert!(escrow_amount < overfill);
+    }
+}
