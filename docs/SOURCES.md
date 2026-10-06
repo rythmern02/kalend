@@ -98,3 +98,21 @@ Every external fact, API route, address, discriminator, and parameter must be ve
   - Splits and reverse splits also adjust the multiplier.
   - `ScaledUiAmountConfig` layout: includes `multiplier`, `new_multiplier`, and `new_multiplier_effective_timestamp`.
   - Yield calculation requires factoring out corporate splits: $D(t) = m(t) / S$, where $S = \prod \text{split\_factor}$.
+
+---
+
+## 5. Solana Liquid Staking Stake Pools (Mainnet Ground Truth)
+
+### Jito Stake Pool (SPL Stake Pool Program)
+- **Program ID**: `SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy` (Standard SPL Stake Pool)
+- **Stake Pool Address**: `Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb` (Verified on Solana Mainnet 2026-10-03)
+- **JitoSOL Mint Address**: `J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn`
+- **Account Data Length**: 611 bytes
+- **Account Layout & Offsets**:
+  - `total_lamports`: Offset `258..266` (u64, little-endian)
+  - `pool_token_supply`: Offset `266..274` (u64, little-endian)
+  - `last_update_epoch`: Offset `274..282` (u64, little-endian)
+- **Attested Index Calculation**:
+  - $\text{idx\_wad} = \lfloor \text{total\_lamports} \times 10^{18} / \text{pool\_token\_supply} \rfloor$
+  - Verified sample value: ~1.3043965 SOL / JitoSOL (`1304396510749700193` WAD).
+

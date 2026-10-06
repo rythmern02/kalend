@@ -6,7 +6,7 @@ use crate::events::ReceivedSettleReport;
 use crate::events::SettleReport;
 
 pub const SPL_STAKE_POOL_PROGRAM_ID: Pubkey =
-    pubkey!("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41HyZXLM581");
+    pubkey!("SPoo1Ku8WFXoNDMHPsrGSTSG1Y47rzgn41SLUNakuHy");
 
 #[derive(Accounts)]
 pub struct SettleOnchain<'info> {
