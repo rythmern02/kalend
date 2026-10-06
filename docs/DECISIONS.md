@@ -74,3 +74,12 @@ All decisions diverging from or clarifying the initial specification are logged 
 - **Context**: Specification requires CLI v1.29.0 or later; earlier docs mentioned v1.24.0.
 - **Decision**: Pin CRE CLI v1.36.0 (released September 2026). Stored in `bin/cre` with local directory isolation.
 - **Status**: Implemented.
+
+## ADR-011: Canonical Account Ordering and ATA Escrows
+- **Date**: 2026-10-03
+- **Context**: In Anchor, account ordering in Rust instructions must strictly correspond with the IDL account ordering across client deserializers, CRE bindings, and the onchain entrypoint. Furthermore, `Escrow` token storage requires canonical ATAs (`associated_token::mint = mint, associated_token::authority = escrow`) to prevent account spoofing and avoid requiring uninitialized keypair signatures.
+- **Decision**:
+  - All instructions (`OpenSeries`, `LockEscrow`, `WithdrawEscrow`, `Strip`, `Merge`, `RedeemPt`, `ClaimYt`, `ExecuteFill`) adhere to the canonical IDL account ordering.
+  - Escrow token accounts are verified as the canonical Associated Token Account owned by the `Escrow` PDA.
+- **Status**: Implemented and verified on Devnet.
+

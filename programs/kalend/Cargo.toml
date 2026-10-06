@@ -20,6 +20,8 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 [dependencies]
 anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
 anchor-spl = { version = "1.0.2", features = ["token", "token_2022", "token_2022_extensions", "associated_token"] }
+solana-sha256-hasher = { version = "3.1.0", features = ["sha2"] }
+solana-hash = "4.4.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "allow" }

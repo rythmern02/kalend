@@ -5,10 +5,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-kalend = "KALE111111111111111111111111111111111111111"
+kalend = "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527"
 
 [programs.devnet]
-kalend = "KALE111111111111111111111111111111111111111"
+kalend = "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527"
 
 [registry]
 url = "https://api.apr.dev"

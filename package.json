@@ -1,0 +1,11 @@
+{
+  "name": "kalend-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test:math": "cargo test --manifest-path programs/kalend/Cargo.toml -- --nocapture",
+    "build:program": "cargo-build-sbf --offline --manifest-path programs/kalend/Cargo.toml -- --ignore-rust-version",
+    "build:idl": "anchor idl build -o target/idl/kalend.json -t target/types/kalend.ts --skip-lint",
+    "build:bindings": "cp target/idl/kalend.json contracts/solana/src/idl/ && HOME=/tmp ./bin/cre generate-bindings solana --language typescript -i contracts/solana/src/idl/ -o contracts/solana/ts/generated/"
+  }
+}
