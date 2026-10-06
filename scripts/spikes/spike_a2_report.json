@@ -1,0 +1,22 @@
+{
+  "hookProgram": "7RE9DaArhevher2XmPAVVhvE3V3kT3bWRDEevQGSuyRQ",
+  "registryInitSig": "266bDWzDM1mtaySf9TJxxeULHrrwVkiewE25Koyw3PmuoXrtLmyQsbrAB1JBuxcPTY2hZSKDBRjcZ8B7JEepGpi2",
+  "mint": "DQYYqMXMd4wxGXQLDbYiVhKFu6yJPKgytw5CFiHjDUC5",
+  "extraMetasInitSig": "uGzBtBMG6ozutDWqu74gasm8dvVD56HVT3tnWrFFXgrR5pcCyEui3Jp8MJbMyfsyNaDCCYMkxh62g4EeGMNueMV",
+  "unaccreditedTransferRejected": true,
+  "unaccreditedError": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x1770. \nLogs: \n[\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb invoke [1]\",\n  \"Program log: Instruction: TransferChecked\",\n  \"Program 7RE9DaArhevher2XmPAVVhvE3V3kT3bWRDEevQGSuyRQ invoke [2]\",\n  \"Program log: AnchorError thrown in programs/kalend-transfer-hook/src/lib.rs:193. Error Code: AccountNotAccredited. Error Number: 6000. Error Message: The target destination wallet is not present in the institutional KYC registry..\",\n  \"Program 7RE9DaArhevher2XmPAVVhvE3V3kT3bWRDEevQGSuyRQ consumed 4104 of 188608 compute units\",\n  \"Program 7RE9DaArhevher2XmPAVVhvE3V3kT3bWRDEevQGSuyRQ failed: custom program error: 0x1770\",\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb consumed 15496 of 200000 compute units\",\n  \"Program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb failed: custom program error: 0x1770\"\n]. \nCatch the `SendTransactionError` and call `getLogs()` on it for full details.",
+  "accreditedTransferApproved": true,
+  "accreditedTransferSig": "2LAmMVWMWG2iVLzbrUwALyMJhyJX3HpWGHazXuSU8VgczumhyEEnwaruheA4Wg1YSuL5mSch6PnwNuwMvdjyHA5c",
+  "confidentialTransferHookAnalysis": {
+    "verifiedConvention": "u64::MAX passed as amount for confidential transfers",
+    "sourceRef": "spl-token-2022/src/extension/confidential_transfer/processor.rs:649",
+    "complianceEnforcement": "Identity accreditation verified on destination wallet; zero knowledge of transferred amount required."
+  },
+  "backpackSecuritiesCount": 1190,
+  "devnetStakePool": {
+    "address": "HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f",
+    "exists": true,
+    "lamports": 505143440,
+    "note": "Devnet stake pool is real but balance is ~0.50 SOL; rate changes are microscopic across epochs. Demonstrates mechanics, not market APR."
+  }
+}
