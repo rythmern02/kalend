@@ -9,16 +9,19 @@ interface PriceData {
   price: string
   conf: string
   publishTime: number
+  source: string
 }
 
-const PYTH_FEEDS = [
+// Real on-chain Pyth Price Accounts on Solana Devnet
+// (Program: gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s)
+const PYTH_ONCHAIN_FEEDS = [
   {
-    id: '0xef0d8b0f970e37f7f4231dbab72b87e45243458cd803a345e3d79ef3037f7f42',
     symbol: 'SOL/USD',
+    pubkey: 'J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix',
   },
   {
-    id: '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43',
     symbol: 'BTC/USD',
+    pubkey: 'HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J',
   },
 ]
 
@@ -30,68 +33,74 @@ export function PythPriceTicker() {
   useEffect(() => {
     let isMounted = true
 
-    async function fetchPythPrices() {
+    async function fetchPythOnChainPrices() {
       try {
-        const ids = PYTH_FEEDS.map((f) => f.id)
-        const query = ids.map((id) => `ids[]=${id}`).join('&')
-        const res = await fetch(`https://hermes.pyth.network/v2/updates/price/latest?${query}`, {
-          cache: 'no-store',
-        })
-        if (!res.ok) return
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com'
+        const results: PriceData[] = []
 
-        const data = await res.json()
-        if (data.parsed && Array.isArray(data.parsed)) {
-          const parsedPrices: PriceData[] = data.parsed.map((item: any) => {
-            const feedMeta = PYTH_FEEDS.find((f) => f.id.toLowerCase() === item.id.toLowerCase())
-            const expo = item.price.expo
-            const rawPrice = BigInt(item.price.price)
-            const rawConf = BigInt(item.price.conf)
-
-            const formattedPrice = (Number(rawPrice) * Math.pow(10, expo)).toFixed(2)
-            const formattedConf = (Number(rawConf) * Math.pow(10, expo)).toFixed(2)
-
-            return {
-              id: item.id,
-              symbol: feedMeta?.symbol || 'UNKNOWN',
-              price: formattedPrice,
-              conf: formattedConf,
-              publishTime: item.price.publish_time,
-            }
+        for (const feed of PYTH_ONCHAIN_FEEDS) {
+          const res = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'getAccountInfo',
+              params: [feed.pubkey, { encoding: 'base64' }],
+            }),
           })
 
-          if (isMounted) {
-            setPrices(parsedPrices)
-            setIsLive(true)
-            setLastUpdated(new Date().toLocaleTimeString())
+          if (!res.ok) continue
+          const data = await res.json()
+          if (!data?.result?.value?.data?.[0]) continue
+
+          // Decode Pyth On-Chain Price Account Buffer (Base64)
+          const base64Str = data.result.value.data[0]
+          const binaryStr = atob(base64Str)
+          const bytes = new Uint8Array(binaryStr.length)
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i)
           }
+
+          const view = new DataView(bytes.buffer)
+          // Pyth Account Layout:
+          // offset 0..4: magic (0xa1b2c3d4)
+          // offset 20..24: expo (int32 LE)
+          // offset 208..216: agg.price (int64 LE)
+          // offset 216..224: agg.conf (uint64 LE)
+          // offset 224..232: agg.pub_slot (uint64 LE)
+          const magic = view.getUint32(0, true)
+          if (magic !== 0xa1b2c3d4) continue
+
+          const expo = view.getInt32(20, true)
+          const rawPrice = view.getBigInt64(208, true)
+          const rawConf = view.getBigUint64(216, true)
+
+          const formattedPrice = (Number(rawPrice) * Math.pow(10, expo)).toFixed(2)
+          const formattedConf = (Number(rawConf) * Math.pow(10, expo)).toFixed(2)
+
+          results.push({
+            id: feed.pubkey,
+            symbol: feed.symbol,
+            price: formattedPrice,
+            conf: formattedConf,
+            publishTime: Math.floor(Date.now() / 1000),
+            source: 'Solana Devnet On-Chain Pyth',
+          })
+        }
+
+        if (isMounted && results.length > 0) {
+          setPrices(results)
+          setIsLive(true)
+          setLastUpdated(new Date().toLocaleTimeString())
         }
       } catch (err) {
-        // Fallback for offline / isolated environments
-        if (isMounted && prices.length === 0) {
-          setPrices([
-            {
-              id: PYTH_FEEDS[0].id,
-              symbol: 'SOL/USD',
-              price: '154.20',
-              conf: '0.08',
-              publishTime: Math.floor(Date.now() / 1000),
-            },
-            {
-              id: PYTH_FEEDS[1].id,
-              symbol: 'BTC/USD',
-              price: '64850.00',
-              conf: '12.50',
-              publishTime: Math.floor(Date.now() / 1000),
-            },
-          ])
-          setIsLive(false)
-          setLastUpdated('Simulated Feed')
-        }
+        console.error('Failed to read on-chain Pyth accounts:', err)
       }
     }
 
-    fetchPythPrices()
-    const interval = setInterval(fetchPythPrices, 10000)
+    fetchPythOnChainPrices()
+    const interval = setInterval(fetchPythOnChainPrices, 8000)
 
     return () => {
       isMounted = false
@@ -108,7 +117,7 @@ export function PythPriceTicker() {
             Pyth Reference Oracles
           </span>
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            Tier 1
+            {isLive ? 'Live On-Chain (Devnet)' : 'Connecting...'}
           </span>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500">
@@ -131,7 +140,7 @@ export function PythPriceTicker() {
               <div className="text-sm font-mono font-bold text-foreground">${p.price}</div>
               <div className="text-[10px] font-mono text-emerald-400 flex items-center justify-end gap-0.5">
                 <TrendingUp className="w-2.5 h-2.5" />
-                Live
+                Live On-Chain
               </div>
             </div>
           </div>
@@ -141,10 +150,10 @@ export function PythPriceTicker() {
       <div className="p-2.5 rounded bg-zinc-900/60 border border-zinc-800 text-[10px] text-zinc-400 flex items-start gap-2">
         <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <span className="text-amber-400 font-semibold">Display Price Only:</span> Pyth feeds are
-          shown for reference and display. Per Prime Directive 2, settlement math is{' '}
-          <span className="underline">never</span> derived from Pyth prices, but solely from attested
-          on-chain stake pool or token multiplier exchange rates.
+          <span className="text-amber-400 font-semibold">Display Price Only:</span> Read directly from
+          the on-chain Pyth oracle program (`gSbePebfvPy7...`) on Solana. Per Prime Directive 2,
+          settlement math is <span className="underline">never</span> derived from Pyth prices, but
+          solely from attested stake pool / token multiplier exchange rates.
         </div>
       </div>
     </div>
