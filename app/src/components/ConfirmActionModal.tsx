@@ -13,6 +13,7 @@ interface ConfirmActionModalProps {
   whatBecomesPublic: string
   isSubmitting?: boolean
   txReceiptUrl?: string
+  error?: string | null
 }
 
 export function ConfirmActionModal({
@@ -25,6 +26,7 @@ export function ConfirmActionModal({
   whatBecomesPublic,
   isSubmitting = false,
   txReceiptUrl,
+  error,
 }: ConfirmActionModalProps) {
   if (!isOpen) return null
 
@@ -90,6 +92,13 @@ export function ConfirmActionModal({
                 <p className="text-[#f5f5f5] text-xs leading-relaxed">{whatBecomesPublic}</p>
               </div>
             </div>
+
+            {error && (
+              <div className="mb-4 p-3 bg-[#240c0c] border border-[#5c1d1d] text-[#f87171] text-xs font-mono rounded-[2px] flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="break-all">{error}</div>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-3">
               <button

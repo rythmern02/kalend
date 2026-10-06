@@ -14,16 +14,20 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries } from '../../../../lib/api'
 import { VisibilityItem } from '../../../../lib/types'
 
+import { useWallet } from '../../../../lib/wallet'
+import { stripTokens, mergeTokens } from '../../../../lib/kalend-client'
+
 export default function StripMergePage() {
   const params = useParams()
   const seriesId = params?.id as string
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
   const [activeTab, setActiveTab] = useState<'strip' | 'merge'>('strip')
-  const [amount, setAmount] = useState<string>('100000')
+  const [amount, setAmount] = useState<string>('1000')
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
 
   const { data: allSeries } = useQuery({
@@ -56,23 +60,50 @@ export default function StripMergePage() {
     },
     {
       label: 'Wallet Owner',
-      value: walletAddress,
+      value: wallet.walletAddress || 'Wallet not connected',
       visibility: 'public_solana',
       description: 'Token account owner on Solana',
     },
   ]
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
+    if (!series) {
+      setActionError('No active series account found on-chain.')
+      return
+    }
+
     setIsSubmitting(true)
-    setTimeout(() => {
+    setActionError(null)
+    try {
+      const parsedAmount = BigInt(Math.floor(Number(amount) * 1e9))
+      let txSig: string
+      if (activeTab === 'strip') {
+        txSig = await stripTokens(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      } else {
+        txSig = await mergeTokens(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      }
+      setReceiptUrl(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`)
+    } catch (err: any) {
+      console.error('Strip/Merge transaction failed:', err)
+      setActionError(err.message || 'Transaction rejected on-chain')
+    } finally {
       setIsSubmitting(false)
-      setReceiptUrl(`https://explorer.solana.com/tx/mock-strip-${Date.now()}?cluster=devnet`)
-    }, 1200)
+    }
   }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <Header walletAddress={walletAddress} connectWallet={() => {}} />
+      <Header />
       <ModeBar state={modeBarState} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -202,6 +233,7 @@ export default function StripMergePage() {
           onClose={() => {
             setIsConfirmOpen(false)
             setReceiptUrl(undefined)
+            setActionError(null)
           }}
           onConfirm={handleConfirmAction}
           actionName={
@@ -222,6 +254,7 @@ export default function StripMergePage() {
           }
           isSubmitting={isSubmitting}
           txReceiptUrl={receiptUrl}
+          error={actionError}
         />
       </main>
     </div>

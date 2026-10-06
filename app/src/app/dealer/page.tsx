@@ -19,58 +19,114 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries } from '../../lib/api'
 
+import { useWallet } from '../../lib/wallet'
+import { sealOrderEnvelopeWithSigner } from '../../lib/crypto'
+import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../../lib/constants'
+
 export default function DealerDeskPage() {
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Dealer99oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
-  const [selectedRound, setSelectedRound] = useState<string>('round-8888-jitosol')
+  const [selectedRound, setSelectedRound] = useState<string>('')
   const [quotePrice, setQuotePrice] = useState<string>('0.9650')
   const [quoteMaxSize, setQuoteMaxSize] = useState<string>('1200000')
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [submissionSuccess, setSubmissionSuccess] = useState<boolean>(false)
 
   const { data: allSeries } = useQuery({
     queryKey: ['series'],
     queryFn: fetchAllSeries,
   })
 
-  // Open rounds in dealer inbox
-  const openRounds = [
-    {
-      id: 'round-8888-jitosol',
-      series: 'CSQJ...FPUwY',
-      asset: 'JitoSOL (Balanced)',
-      side: 'SellPT',
-      windowRemaining: '42s',
-      status: 'open',
-      minFill: '500,000 PT',
+  // Fetch live rounds from Relay
+  const { data: relayRounds = [], refetch: refetchRounds } = useQuery({
+    queryKey: ['relay-rounds'],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`${RELAY_API_URL}/rfq/rounds`)
+        if (!res.ok) return []
+        const data = await res.json()
+        return (data.rounds || []).filter((r: any) => r.status === 'open')
+      } catch {
+        return []
+      }
     },
-    {
-      id: 'round-9999-usdy',
-      series: 'A1KL...Eto6',
-      asset: 'Ondo USDY (Conservative)',
-      side: 'SellPT',
-      windowRemaining: '115s',
-      status: 'open',
-      minFill: '1,000,000 PT',
-    },
-  ]
+    refetchInterval: 5000,
+  })
 
-  const handleQuoteSubmit = () => {
+  // Select first open round if none selected
+  React.useEffect(() => {
+    if (!selectedRound && relayRounds.length > 0) {
+      setSelectedRound(relayRounds[0].round_id)
+    }
+  }, [relayRounds, selectedRound])
+
+  const handleQuoteSubmit = async () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      wallet.setShowConnectModal(true)
+      return
+    }
+    if (!selectedRound) {
+      setActionError('Please select an active RFQ round first.')
+      return
+    }
+
     setIsSubmitting(true)
-    setTimeout(() => {
+    setActionError(null)
+
+    try {
+      const payload = {
+        v: 1,
+        round_id: selectedRound,
+        dealer: wallet.walletAddress,
+        price: quotePrice,
+        max_size: quoteMaxSize,
+        nonce: Date.now(),
+        not_after: Math.floor(Date.now() / 1000) + 300,
+      }
+
+      const sealed = await sealOrderEnvelopeWithSigner(
+        ENCLAVE_PUBLIC_KEY,
+        selectedRound,
+        CURRENT_KID,
+        'KALEND/v1/quote',
+        payload,
+        wallet.publicKey.toBytes(),
+        (msg) => wallet.signMessage(msg)
+      )
+
+      const res = await fetch(`${RELAY_API_URL}/rfq/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          round_id: selectedRound,
+          enc: sealed.enc,
+          ciphertext: sealed.ciphertext,
+          kid: CURRENT_KID,
+        }),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(`Relay rejected quote: ${errText}`)
+      }
+
+      setSubmissionSuccess(true)
+      refetchRounds()
+    } catch (err: any) {
+      console.error('Quote submission failed:', err)
+      setActionError(err.message || 'Quote submission failed')
+    } finally {
       setIsSubmitting(false)
-      setReceiptUrl(`https://explorer.solana.com/tx/mock-quote-${Date.now()}?cluster=devnet`)
-    }, 1200)
+    }
   }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
       <Header
-        walletAddress={walletAddress}
         userRole="Authorized Dealer Desk"
-        connectWallet={() => {}}
       />
       <ModeBar state={modeBarState} />
 
@@ -105,41 +161,50 @@ export default function DealerDeskPage() {
           <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center justify-between font-mono text-xs text-[#a8a8a8] px-1">
               <span className="uppercase">Open Auction Rounds</span>
-              <span>{openRounds.length} Active</span>
+              <span>{relayRounds.length} Active</span>
             </div>
 
-            {openRounds.map((rnd) => (
-              <div
-                key={rnd.id}
-                onClick={() => setSelectedRound(rnd.id)}
-                className={`p-5 rounded-[4px] border cursor-pointer transition-colors ${
-                  selectedRound === rnd.id
-                    ? 'bg-[#141414] border-white text-white'
-                    : 'bg-[#0a0a0a] border-[#242424] text-[#a8a8a8] hover:border-[#404040]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-serif text-base text-white font-medium">
-                    {rnd.asset}
-                  </span>
-                  <div className="flex items-center gap-1 font-mono text-xs text-[#fbbf24]">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{rnd.windowRemaining}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[#737373]">
-                  <div>
-                    <span className="block">Side:</span>
-                    <span className="text-white">{rnd.side}</span>
-                  </div>
-                  <div>
-                    <span className="block">Min Fill:</span>
-                    <span className="text-white">{rnd.minFill}</span>
-                  </div>
-                </div>
+            {relayRounds.length === 0 ? (
+              <div className="p-8 rounded-[4px] bg-[#0a0a0a] border border-[#222222] text-center font-mono text-xs">
+                <span className="text-[#a8a8a8] block mb-2">No Active RFQ Rounds</span>
+                <p className="text-[#555] text-[11px] leading-relaxed">
+                  Awaiting new RFQ requests from institutional requesters. Check back when an auction round opens.
+                </p>
               </div>
-            ))}
+            ) : (
+              relayRounds.map((rnd: any) => (
+                <div
+                  key={rnd.round_id}
+                  onClick={() => setSelectedRound(rnd.round_id)}
+                  className={`p-5 rounded-[4px] border cursor-pointer transition-colors ${
+                    selectedRound === rnd.round_id
+                      ? 'bg-[#141414] border-white text-white'
+                      : 'bg-[#0a0a0a] border-[#242424] text-[#a8a8a8] hover:border-[#404040]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-mono text-sm text-white font-medium">
+                      Round {rnd.round_id.slice(0, 8)}...
+                    </span>
+                    <div className="flex items-center gap-1 font-mono text-xs text-[#fbbf24]">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{rnd.status}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[#737373]">
+                    <div>
+                      <span className="block">Series:</span>
+                      <span className="text-white">{rnd.series.slice(0, 8)}...</span>
+                    </div>
+                    <div>
+                      <span className="block">Quotes:</span>
+                      <span className="text-white">{rnd.quotes?.length ?? 0}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
 
             {/* Dealer Performance & Escrow */}
             <div className="p-5 rounded-[4px] bg-[#0d0d0d] border border-[#242424] font-mono text-xs space-y-3 mt-6">
@@ -230,15 +295,17 @@ export default function DealerDeskPage() {
           isOpen={isConfirmOpen}
           onClose={() => {
             setIsConfirmOpen(false)
-            setReceiptUrl(undefined)
+            setActionError(null)
+            setSubmissionSuccess(false)
           }}
           onConfirm={handleQuoteSubmit}
           actionName={`Submit Sealed Quote (${quotePrice} USDC)`}
           whatWillHappen={`Encrypts your quote (${quotePrice} USDC for up to ${quoteMaxSize} PT) to the Chainlink CRE enclave public key and forwards ciphertext to the relay.`}
-          whatItCosts="~0.001 SOL network signature fee"
-          whatBecomesPublic="Zero order terms are public. Only the final settlement fill receipt will reference your filled tranche."
+          whatItCosts="Zero gas (Client-side Ed25519 signature + HPKE encryption)"
+          whatBecomesPublic="Zero order terms are public. Only the signed fill receipt touches Solana if your quote wins matching."
           isSubmitting={isSubmitting}
-          txReceiptUrl={receiptUrl}
+          txReceiptUrl={submissionSuccess ? 'https://explorer.solana.com' : undefined}
+          error={actionError}
         />
       </main>
     </div>

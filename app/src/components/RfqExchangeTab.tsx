@@ -17,8 +17,9 @@ import {
   Layers,
   Info,
 } from 'lucide-react'
-import { sealOrderEnvelope } from '../lib/crypto'
+import { sealOrderEnvelope, sealOrderEnvelopeWithSigner } from '../lib/crypto'
 import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../lib/constants'
+import { useWallet } from '../lib/wallet'
 
 export type VaultTier = 'CONSERVATIVE_ONDO' | 'BALANCED_LST' | 'ALPHA_BACKPACK'
 
@@ -82,7 +83,8 @@ const VAULT_OPTIONS: VaultOption[] = [
   },
 ]
 
-export function RfqExchangeTab({ walletAddress }: { walletAddress: string | null }) {
+export function RfqExchangeTab({ walletAddress: propWalletAddress }: { walletAddress?: string | null }) {
+  const wallet = useWallet()
   // Institutional Wizard State
   const [selectedVault, setSelectedVault] = useState<VaultTier>('CONSERVATIVE_ONDO')
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
@@ -153,8 +155,8 @@ export function RfqExchangeTab({ walletAddress }: { walletAddress: string | null
 
   // Submit sealed order
   const handleSubmitSealedOrder = async () => {
-    if (!walletAddress) {
-      alert('Please connect wallet!')
+    if (!wallet.connected || !wallet.publicKey) {
+      wallet.setShowConnectModal(true)
       return
     }
     if (!selectedRoundId) {
@@ -163,78 +165,73 @@ export function RfqExchangeTab({ walletAddress }: { walletAddress: string | null
     }
 
     setIsLoading(true)
-    setStatusMessage('1/3 Locking asset into Program Escrow PDA...')
+    setStatusMessage('1/3 Signing order with wallet & sealing ciphertext with audited pure-JS HPKE (RFC 9180)...')
 
-    setTimeout(async () => {
-      setStatusMessage('2/3 Signing order with wallet & Sealing ciphertext with pure-JS HPKE (RFC 9180)...')
-
-      const dummySecretKey = new Uint8Array(32).fill(0x11)
-      const dummyPubKey = new Uint8Array(32).fill(0x22)
-
-      const payload =
-        role === 'requester'
-          ? {
-              v: 1,
-              round_id: selectedRoundId,
-              series: activeVault.seriesPubkey,
-              side,
-              size: sizeAmount,
-              limit_price: derivedPrice,
-              quote_mint: activeVault.quoteMint,
-              requester: walletAddress,
-              nonce: Date.now(),
-              not_after: Math.floor(Date.now() / 1000) + 300,
-            }
-          : {
-              v: 1,
-              round_id: selectedRoundId,
-              dealer: walletAddress,
-              price: derivedPrice,
-              max_size: sizeAmount,
-              nonce: Date.now(),
-              not_after: Math.floor(Date.now() / 1000) + 300,
-            }
-
-      try {
-        const sealed = sealOrderEnvelope(
-          ENCLAVE_PUBLIC_KEY,
-          selectedRoundId,
-          CURRENT_KID,
-          role === 'requester' ? 'KALEND/v1/request' : 'KALEND/v1/quote',
-          payload,
-          dummySecretKey,
-          dummyPubKey
-        )
-
-        setSealedCiphertextSummary(`HPKE Envelope: ${sealed.ciphertext.slice(0, 32)}... (${sealed.ciphertext.length / 2} bytes)`)
-
-        setStatusMessage('3/3 Submitting sealed ciphertext to Relay (Zero plaintext leaves browser)...')
-
-        const endpoint = role === 'requester' ? '/rfq/request' : '/rfq/quote'
-        const res = await fetch(`${RELAY_API_URL}${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+    const activeAddress = wallet.walletAddress || ''
+    const payload =
+      role === 'requester'
+        ? {
+            v: 1,
             round_id: selectedRoundId,
-            enc: sealed.enc,
-            ciphertext: sealed.ciphertext,
-            kid: CURRENT_KID,
-          }),
-        })
+            series: activeVault.seriesPubkey,
+            side,
+            size: sizeAmount,
+            limit_price: derivedPrice,
+            quote_mint: activeVault.quoteMint,
+            requester: activeAddress,
+            nonce: Date.now(),
+            not_after: Math.floor(Date.now() / 1000) + 300,
+          }
+        : {
+            v: 1,
+            round_id: selectedRoundId,
+            dealer: activeAddress,
+            price: derivedPrice,
+            max_size: sizeAmount,
+            nonce: Date.now(),
+            not_after: Math.floor(Date.now() / 1000) + 300,
+          }
 
-        if (res.ok) {
-          setStatusMessage('✓ Sealed ticket successfully submitted to Relay! Enclave matching will run at round close.')
-          fetchRounds()
-        } else {
-          const errData = await res.json()
-          setStatusMessage(`Submission error: ${errData.error || 'Failed'}`)
-        }
-      } catch (err: any) {
-        setStatusMessage(`Client crypto error: ${err.message}`)
-      } finally {
-        setIsLoading(false)
+    try {
+      const sealed = await sealOrderEnvelopeWithSigner(
+        ENCLAVE_PUBLIC_KEY,
+        selectedRoundId,
+        CURRENT_KID,
+        role === 'requester' ? 'KALEND/v1/request' : 'KALEND/v1/quote',
+        payload,
+        wallet.publicKey.toBytes(),
+        (msg) => wallet.signMessage(msg)
+      )
+
+      setSealedCiphertextSummary(`HPKE Envelope: ${sealed.ciphertext.slice(0, 32)}... (${sealed.ciphertext.length / 2} bytes)`)
+
+      setStatusMessage('2/3 Submitting sealed ciphertext to Relay (Zero plaintext leaves browser)...')
+
+      const endpoint = role === 'requester' ? '/rfq/request' : '/rfq/quote'
+      const res = await fetch(`${RELAY_API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          round_id: selectedRoundId,
+          enc: sealed.enc,
+          ciphertext: sealed.ciphertext,
+          kid: CURRENT_KID,
+        }),
+      })
+
+      if (res.ok) {
+        setStatusMessage('✓ Sealed ticket successfully submitted to Relay! Enclave matching will run at round close.')
+        fetchRounds()
+      } else {
+        const errData = await res.json()
+        setStatusMessage(`Submission error: ${errData.error || 'Failed'}`)
       }
-    }, 1000)
+    } catch (err: any) {
+      console.error('RFQ sealed order error:', err)
+      setStatusMessage(`Client error: ${err.message}`)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Trigger matching manually

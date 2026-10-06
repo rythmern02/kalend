@@ -24,13 +24,15 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries } from '../../../lib/api'
 import { VisibilityItem } from '../../../lib/types'
-import { sealOrderEnvelope } from '../../../lib/crypto'
+import { useWallet } from '../../../lib/wallet'
+import { sealOrderEnvelopeWithSigner } from '../../../lib/crypto'
 import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../../../lib/constants'
 
 export default function NewRfqPage() {
   const router = useRouter()
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
+  const walletAddress = wallet.walletAddress || ''
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -96,6 +98,11 @@ export default function NewRfqPage() {
   ]
 
   const handleSealAndSubmit = async () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      wallet.setShowConnectModal(true)
+      return
+    }
+
     setIsSealing(true)
     const newRoundId = Array.from({ length: 32 }, () =>
       Math.floor(Math.random() * 256)
@@ -105,12 +112,8 @@ export default function NewRfqPage() {
     setRoundId(newRoundId)
 
     try {
-      // Step 1: Local Signing
+      // Step 1: Local Signing with connected Solana wallet
       setSealingStepText('Step 1 of 3: Signing order with wallet private key...')
-      await new Promise((r) => setTimeout(r, 600))
-
-      const dummySecretKey = new Uint8Array(32).fill(0x55)
-      const dummyPubKey = new Uint8Array(32).fill(0xaa)
 
       const payload = {
         v: 1,
@@ -120,30 +123,28 @@ export default function NewRfqPage() {
         size,
         limit_price: impliedPrice,
         quote_mint: selectedSeries?.quote_mint || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-        requester: walletAddress,
+        requester: wallet.walletAddress,
         nonce: Date.now(),
         not_after: Math.floor(Date.now() / 1000) + windowLengthSec,
       }
 
-      // Step 2: Client-Side HPKE Sealing
+      // Step 2: Client-Side HPKE Sealing to Enclave Public Key
       setSealingStepText('Step 2 of 3: HPKE (RFC 9180) sealing to Enclave Public Key...')
-      await new Promise((r) => setTimeout(r, 600))
 
-      const sealed = sealOrderEnvelope(
+      const sealed = await sealOrderEnvelopeWithSigner(
         ENCLAVE_PUBLIC_KEY,
         newRoundId,
         CURRENT_KID,
         'KALEND/v1/request',
         payload,
-        dummySecretKey,
-        dummyPubKey
+        wallet.publicKey.toBytes(),
+        (msg) => wallet.signMessage(msg)
       )
 
-      // Step 3: Relay Routing
+      // Step 3: Relay Routing (Ciphertext Only)
       setSealingStepText('Step 3 of 3: Submitting sealed ciphertext to Relay (Zero Plaintext)...')
-      await new Promise((r) => setTimeout(r, 600))
 
-      await fetch(`${RELAY_API_URL}/rfq/request`, {
+      const res = await fetch(`${RELAY_API_URL}/rfq/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -152,19 +153,27 @@ export default function NewRfqPage() {
           ciphertext: sealed.ciphertext,
           kid: CURRENT_KID,
         }),
-      }).catch(() => {})
+      }).catch((e) => {
+        throw new Error(`Relay connection failed: ${e.message}`)
+      })
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`Relay rejected request: ${errorText}`)
+      }
 
       // Redirect to round status
       router.push(`/rfq/${newRoundId}`)
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('RFQ sealing/submission failed:', err)
+      alert(`RFQ Submission Failed: ${err.message || 'Unknown error'}`)
       setIsSealing(false)
     }
   }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <Header walletAddress={walletAddress} connectWallet={() => {}} />
+      <Header />
       <ModeBar state={modeBarState} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">

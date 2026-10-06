@@ -1,0 +1,3362 @@
+{
+  "address": "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527",
+  "metadata": {
+    "name": "kalend",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Private request-for-quote exchange for dated yield on Solana, settled through Chainlink CRE"
+  },
+  "instructions": [
+    {
+      "name": "accept_authority",
+      "docs": [
+        "Accepts pending governance authority"
+      ],
+      "discriminator": [
+        107,
+        86,
+        198,
+        91,
+        33,
+        12,
+        107,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pending_authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_yt",
+      "docs": [
+        "Claims accrued yield for settled YT tokens in raw collateral"
+      ],
+      "discriminator": [
+        241,
+        29,
+        138,
+        19,
+        166,
+        210,
+        32,
+        191
+      ],
+      "accounts": [
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "allow_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "yt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Raw collateral vault owned by Series PDA"
+          ],
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "user_yt",
+          "docs": [
+            "User's YT token account to burn from"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_collateral",
+          "docs": [
+            "User's raw collateral destination account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collateral_token_program"
+        },
+        {
+          "name": "token_2022_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_fill",
+      "docs": [
+        "Permissionlessly executes an approved fill using an Address Lookup Table"
+      ],
+      "discriminator": [
+        214,
+        179,
+        24,
+        216,
+        219,
+        100,
+        181,
+        21
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "requester"
+        },
+        {
+          "name": "dealer"
+        },
+        {
+          "name": "asset_mint"
+        },
+        {
+          "name": "quote_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "asset_token_program"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "fill_receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "fill_receipt.round_id",
+                "account": "FillReceipt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "series",
+          "relations": [
+            "requester_asset_escrow",
+            "dealer_quote_escrow"
+          ]
+        },
+        {
+          "name": "allow_entry_requester",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "requester"
+              }
+            ]
+          }
+        },
+        {
+          "name": "allow_entry_dealer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "dealer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "requester_asset_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "series"
+              },
+              {
+                "kind": "account",
+                "path": "requester"
+              },
+              {
+                "kind": "account",
+                "path": "asset_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "requester_asset_escrow_token",
+          "writable": true
+        },
+        {
+          "name": "dealer_quote_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "series"
+              },
+              {
+                "kind": "account",
+                "path": "dealer"
+              },
+              {
+                "kind": "account",
+                "path": "quote_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dealer_quote_escrow_token",
+          "writable": true
+        },
+        {
+          "name": "requester_quote_token",
+          "docs": [
+            "Requester destination account for quote currency"
+          ],
+          "writable": true
+        },
+        {
+          "name": "dealer_asset_token",
+          "docs": [
+            "Dealer destination account for asset currency (PT or YT)"
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_config",
+      "docs": [
+        "Initializes protocol global Config, Registry, and RentVault PDA"
+      ],
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  110,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "cluster_mode",
+          "type": "u8"
+        },
+        {
+          "name": "enclave_key_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "treasury",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "lock_escrow",
+      "docs": [
+        "Locks tokens into a program-owned Escrow PDA"
+      ],
+      "discriminator": [
+        55,
+        16,
+        5,
+        80,
+        13,
+        102,
+        206,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "series"
+        },
+        {
+          "name": "allow_entry",
+          "docs": [
+            "AllowEntry validating the user has Requester, Dealer, or Strip permissions"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "series"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "escrow_token",
+          "docs": [
+            "Escrow token account owned by Escrow PDA (canonical ATA)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "owner_token",
+          "docs": [
+            "Owner token source account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "lock_until",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "merge",
+      "docs": [
+        "Merges equal PT and YT tokens before maturity, releasing 1:1 raw collateral"
+      ],
+      "discriminator": [
+        148,
+        141,
+        236,
+        47,
+        174,
+        126,
+        69,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "collateral_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "pt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "yt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Raw collateral vault owned by Series PDA"
+          ],
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "user_collateral",
+          "docs": [
+            "User's raw collateral destination account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_pt",
+          "docs": [
+            "User's PT source account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_yt",
+          "docs": [
+            "User's YT source account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collateral_token_program"
+        },
+        {
+          "name": "token_2022_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "on_report",
+      "docs": [
+        "Receives and processes reports from Chainlink Keystone Forwarder CPI"
+      ],
+      "discriminator": [
+        214,
+        173,
+        18,
+        221,
+        173,
+        148,
+        151,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "state"
+        },
+        {
+          "name": "forwarder_authority",
+          "docs": [
+            "Signer PDA derived by the forwarder: [\"forwarder\", forwarderState, receiverProgram]"
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "report",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "open_series",
+      "docs": [
+        "Deploys a new dated yield Series with PT/YT Token-2022 mints"
+      ],
+      "discriminator": [
+        73,
+        68,
+        8,
+        212,
+        30,
+        76,
+        206,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "series",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              },
+              {
+                "kind": "arg",
+                "path": "maturity_ts"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "docs": [
+            "Raw collateral mint"
+          ]
+        },
+        {
+          "name": "collateral_token_program",
+          "docs": [
+            "Program owning the collateral mint (Token or Token-2022)"
+          ]
+        },
+        {
+          "name": "quote_mint",
+          "docs": [
+            "Quote asset mint"
+          ]
+        },
+        {
+          "name": "pt_mint",
+          "docs": [
+            "Principal Token (PT) Token-2022 mint"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "yt_mint",
+          "docs": [
+            "Yield Token (YT) Token-2022 mint"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Vault account holding raw collateral (canonical ATA owned by Series PDA)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "series"
+              },
+              {
+                "kind": "account",
+                "path": "collateral_token_program"
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "token_2022_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "maturity_ts",
+          "type": "i64"
+        },
+        {
+          "name": "nonce",
+          "type": "u16"
+        },
+        {
+          "name": "index_kind",
+          "type": "u8"
+        },
+        {
+          "name": "index_source",
+          "type": "pubkey"
+        },
+        {
+          "name": "idx_open",
+          "type": "u128"
+        },
+        {
+          "name": "privacy_mode",
+          "type": "u8"
+        },
+        {
+          "name": "max_rate_bps",
+          "type": "u32"
+        },
+        {
+          "name": "dividend_cap_bps",
+          "type": "u32"
+        },
+        {
+          "name": "accept_issuer_risk",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pause_global",
+      "docs": [
+        "Toggles global protocol pause"
+      ],
+      "discriminator": [
+        66,
+        34,
+        235,
+        8,
+        99,
+        203,
+        107,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pause_series",
+      "docs": [
+        "Toggles pause on an individual Series"
+      ],
+      "discriminator": [
+        234,
+        22,
+        6,
+        47,
+        199,
+        248,
+        152,
+        204
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "propose_authority",
+      "docs": [
+        "Proposes a new governance authority (two-step transfer)"
+      ],
+      "discriminator": [
+        20,
+        148,
+        236,
+        198,
+        76,
+        119,
+        99,
+        142
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "redeem_pt",
+      "docs": [
+        "Redeems settled PT tokens for in-kind raw principal collateral"
+      ],
+      "discriminator": [
+        249,
+        183,
+        230,
+        236,
+        7,
+        233,
+        13,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "allow_entry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "pt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Raw collateral vault owned by Series PDA"
+          ],
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "user_pt",
+          "docs": [
+            "User's PT token account to burn from"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_collateral",
+          "docs": [
+            "User's raw collateral destination account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collateral_token_program"
+        },
+        {
+          "name": "token_2022_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "remove_allow_entry",
+      "docs": [
+        "Closes an AllowEntry account"
+      ],
+      "discriminator": [
+        94,
+        199,
+        210,
+        223,
+        195,
+        7,
+        12,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "allow_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_allow_entry",
+      "docs": [
+        "Sets or updates a wallet's AllowEntry permissions and expiration"
+      ],
+      "discriminator": [
+        163,
+        128,
+        74,
+        191,
+        122,
+        89,
+        227,
+        24
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "allow_entry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "wallet"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "roles",
+          "type": "u8"
+        },
+        {
+          "name": "expiry_ts",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "set_forwarder_entry",
+      "docs": [
+        "Updates or registers a forwarder entry in Config"
+      ],
+      "discriminator": [
+        224,
+        133,
+        157,
+        27,
+        61,
+        56,
+        228,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        },
+        {
+          "name": "program",
+          "type": "pubkey"
+        },
+        {
+          "name": "state",
+          "type": "pubkey"
+        },
+        {
+          "name": "allowed_workflow",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_onchain",
+      "docs": [
+        "Permissionless onchain settlement crank for StakePoolRate series"
+      ],
+      "discriminator": [
+        141,
+        28,
+        98,
+        52,
+        171,
+        123,
+        63,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "index_source",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "crank",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "strip",
+      "docs": [
+        "Strips raw collateral into equal 1:1 PT and YT tokens"
+      ],
+      "discriminator": [
+        246,
+        68,
+        231,
+        141,
+        62,
+        163,
+        189,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "series",
+          "writable": true
+        },
+        {
+          "name": "allow_entry",
+          "docs": [
+            "AllowEntry validating the user has the Strip role"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "pt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "yt_mint",
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Raw collateral vault owned by Series PDA"
+          ],
+          "writable": true,
+          "relations": [
+            "series"
+          ]
+        },
+        {
+          "name": "user_collateral",
+          "docs": [
+            "User's raw collateral source account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_pt",
+          "docs": [
+            "User's PT destination account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_yt",
+          "docs": [
+            "User's YT destination account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "collateral_token_program"
+        },
+        {
+          "name": "token_2022_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_escrow",
+      "docs": [
+        "Withdraws tokens from Escrow PDA after lock_until expires"
+      ],
+      "discriminator": [
+        81,
+        84,
+        226,
+        128,
+        245,
+        47,
+        96,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "series"
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "series"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow_token",
+          "docs": [
+            "Escrow token account owned by Escrow PDA (canonical ATA)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "owner_token",
+          "docs": [
+            "Owner destination token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AllowEntry",
+      "discriminator": [
+        3,
+        29,
+        6,
+        254,
+        2,
+        209,
+        219,
+        245
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Escrow",
+      "discriminator": [
+        31,
+        213,
+        123,
+        187,
+        186,
+        22,
+        218,
+        155
+      ]
+    },
+    {
+      "name": "FillReceipt",
+      "discriminator": [
+        8,
+        10,
+        169,
+        84,
+        163,
+        19,
+        167,
+        139
+      ]
+    },
+    {
+      "name": "Registry",
+      "discriminator": [
+        47,
+        174,
+        110,
+        246,
+        184,
+        182,
+        252,
+        218
+      ]
+    },
+    {
+      "name": "Series",
+      "discriminator": [
+        240,
+        97,
+        8,
+        183,
+        139,
+        77,
+        250,
+        162
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AllowEntryRemoved",
+      "discriminator": [
+        116,
+        251,
+        75,
+        240,
+        62,
+        90,
+        18,
+        157
+      ]
+    },
+    {
+      "name": "AllowEntrySet",
+      "discriminator": [
+        167,
+        199,
+        136,
+        57,
+        136,
+        245,
+        22,
+        172
+      ]
+    },
+    {
+      "name": "AuthorityTransferAccepted",
+      "discriminator": [
+        149,
+        165,
+        140,
+        221,
+        104,
+        203,
+        239,
+        121
+      ]
+    },
+    {
+      "name": "AuthorityTransferProposed",
+      "discriminator": [
+        103,
+        244,
+        27,
+        116,
+        177,
+        4,
+        100,
+        119
+      ]
+    },
+    {
+      "name": "ConfigInitialized",
+      "discriminator": [
+        181,
+        49,
+        200,
+        156,
+        19,
+        167,
+        178,
+        91
+      ]
+    },
+    {
+      "name": "EscrowLocked",
+      "discriminator": [
+        128,
+        116,
+        18,
+        115,
+        200,
+        133,
+        30,
+        120
+      ]
+    },
+    {
+      "name": "EscrowWithdrawn",
+      "discriminator": [
+        43,
+        206,
+        174,
+        47,
+        105,
+        219,
+        216,
+        239
+      ]
+    },
+    {
+      "name": "FillExecuted",
+      "discriminator": [
+        130,
+        21,
+        84,
+        56,
+        205,
+        123,
+        241,
+        212
+      ]
+    },
+    {
+      "name": "ForwarderUpdated",
+      "discriminator": [
+        91,
+        195,
+        248,
+        117,
+        50,
+        125,
+        217,
+        251
+      ]
+    },
+    {
+      "name": "GlobalPauseToggled",
+      "discriminator": [
+        98,
+        104,
+        111,
+        190,
+        104,
+        173,
+        74,
+        236
+      ]
+    },
+    {
+      "name": "PtRedeemed",
+      "discriminator": [
+        211,
+        121,
+        97,
+        51,
+        47,
+        225,
+        196,
+        226
+      ]
+    },
+    {
+      "name": "ReceivedFillReport",
+      "discriminator": [
+        33,
+        25,
+        166,
+        53,
+        204,
+        250,
+        100,
+        221
+      ]
+    },
+    {
+      "name": "ReceivedRateReport",
+      "discriminator": [
+        144,
+        204,
+        54,
+        24,
+        180,
+        131,
+        122,
+        96
+      ]
+    },
+    {
+      "name": "ReceivedSettleReport",
+      "discriminator": [
+        166,
+        67,
+        123,
+        98,
+        54,
+        242,
+        171,
+        223
+      ]
+    },
+    {
+      "name": "SeriesOpened",
+      "discriminator": [
+        203,
+        170,
+        78,
+        184,
+        137,
+        221,
+        220,
+        207
+      ]
+    },
+    {
+      "name": "SeriesPauseToggled",
+      "discriminator": [
+        209,
+        58,
+        205,
+        83,
+        87,
+        114,
+        26,
+        192
+      ]
+    },
+    {
+      "name": "TokensMerged",
+      "discriminator": [
+        178,
+        179,
+        160,
+        81,
+        141,
+        143,
+        120,
+        66
+      ]
+    },
+    {
+      "name": "TokensStripped",
+      "discriminator": [
+        31,
+        89,
+        157,
+        156,
+        133,
+        187,
+        88,
+        16
+      ]
+    },
+    {
+      "name": "YtClaimed",
+      "discriminator": [
+        34,
+        184,
+        60,
+        58,
+        11,
+        207,
+        243,
+        152
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: Caller is not the authorized protocol authority"
+    },
+    {
+      "code": 6001,
+      "name": "PendingAuthorityMismatch",
+      "msg": "PendingAuthorityMismatch: Caller is not the designated pending authority"
+    },
+    {
+      "code": 6002,
+      "name": "ProtocolPaused",
+      "msg": "ProtocolPaused: Protocol is currently paused by governance"
+    },
+    {
+      "code": 6003,
+      "name": "SeriesPaused",
+      "msg": "SeriesPaused: Target series is currently paused"
+    },
+    {
+      "code": 6004,
+      "name": "SeriesNotOpen",
+      "msg": "SeriesNotOpen: Series status is not Open"
+    },
+    {
+      "code": 6005,
+      "name": "SeriesAlreadySettled",
+      "msg": "SeriesAlreadySettled: Series is already settled"
+    },
+    {
+      "code": 6006,
+      "name": "SeriesMaturityNotReached",
+      "msg": "SeriesMaturityNotReached: Cannot settle series prior to maturity timestamp"
+    },
+    {
+      "code": 6007,
+      "name": "SeriesAlreadyMatured",
+      "msg": "SeriesAlreadyMatured: Cannot strip or merge series at or after maturity timestamp"
+    },
+    {
+      "code": 6008,
+      "name": "SeriesNotSettled",
+      "msg": "SeriesNotSettled: Redemptions and claims require settled series"
+    },
+    {
+      "code": 6009,
+      "name": "MaturityInPast",
+      "msg": "MaturityInPast: Series maturity timestamp must be in the future"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidCollateralMint",
+      "msg": "InvalidCollateralMint: Collateral mint does not conform to extension safety policy"
+    },
+    {
+      "code": 6011,
+      "name": "DisallowedCollateralExtension",
+      "msg": "DisallowedCollateralExtension: Mint carries a forbidden Token-2022 extension"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidAllowEntry",
+      "msg": "InvalidAllowEntry: Wallet has no valid or active AllowEntry"
+    },
+    {
+      "code": 6013,
+      "name": "AllowEntryExpired",
+      "msg": "AllowEntryExpired: AllowEntry has passed its expiration timestamp"
+    },
+    {
+      "code": 6014,
+      "name": "MissingRole",
+      "msg": "MissingRole: Wallet lacks the required role bit for this instruction"
+    },
+    {
+      "code": 6015,
+      "name": "EscrowLocked",
+      "msg": "EscrowLocked: Escrow funds cannot be withdrawn before lock_until timestamp"
+    },
+    {
+      "code": 6016,
+      "name": "InsufficientEscrowBalance",
+      "msg": "InsufficientEscrowBalance: Escrow does not hold sufficient tokens"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidForwarderProgram",
+      "msg": "InvalidForwarderProgram: Forwarder program is not registered in Config"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidForwarderState",
+      "msg": "InvalidForwarderState: Forwarder state account does not match registered forwarder"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidForwarderAuthority",
+      "msg": "InvalidForwarderAuthority: forwarder_authority signer does not match PDA derivation"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidWorkflowIdentity",
+      "msg": "InvalidWorkflowIdentity: Workflow ID or owner does not match allowed forwarder entry"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidReportPayload",
+      "msg": "InvalidReportPayload: Malformed or unparseable report payload"
+    },
+    {
+      "code": 6022,
+      "name": "TrailingReportBytes",
+      "msg": "TrailingReportBytes: Trailing bytes detected after decoding report payload"
+    },
+    {
+      "code": 6023,
+      "name": "UnsupportedReportVersion",
+      "msg": "UnsupportedReportVersion: Report version is not supported"
+    },
+    {
+      "code": 6024,
+      "name": "UnknownReportKind",
+      "msg": "UnknownReportKind: Report kind must be 1 (Fill), 2 (Settle), or 3 (Rate)"
+    },
+    {
+      "code": 6025,
+      "name": "RateExceedsCap",
+      "msg": "RateExceedsCap: Implied or observed rate exceeds series max_rate_bps cap"
+    },
+    {
+      "code": 6026,
+      "name": "DividendBandExceeded",
+      "msg": "DividendBandExceeded: Dividend growth index outside configured band; series disputed"
+    },
+    {
+      "code": 6027,
+      "name": "RoundExpired",
+      "msg": "RoundExpired: Fill report received after not_after timestamp expiration"
+    },
+    {
+      "code": 6028,
+      "name": "FillAlreadyExecuted",
+      "msg": "FillAlreadyExecuted: Fill receipt has already been executed"
+    },
+    {
+      "code": 6029,
+      "name": "FillNotApproved",
+      "msg": "FillNotApproved: Fill receipt is not in Approved status"
+    },
+    {
+      "code": 6030,
+      "name": "SeriesMismatch",
+      "msg": "SeriesMismatch: Series specified does not match FillReceipt or report"
+    },
+    {
+      "code": 6031,
+      "name": "TokenMismatch",
+      "msg": "TokenMismatch: Escrow or mint token account does not match series specifications"
+    },
+    {
+      "code": 6032,
+      "name": "PartyMismatch",
+      "msg": "PartyMismatch: Wallet does not match requester or dealer in FillReceipt"
+    },
+    {
+      "code": 6033,
+      "name": "MathOverflow",
+      "msg": "MathOverflow: Arithmetic calculation encountered an overflow or division by zero"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidIndex",
+      "msg": "InvalidIndex: Settlement index must be positive"
+    },
+    {
+      "code": 6035,
+      "name": "ZeroAmount",
+      "msg": "ZeroAmount: Amount must be greater than zero"
+    },
+    {
+      "code": 6036,
+      "name": "RegistryFull",
+      "msg": "RegistryFull: Series registry has reached its maximum limit (64 series)"
+    },
+    {
+      "code": 6037,
+      "name": "MockForwarderForbidden",
+      "msg": "MockForwarderForbidden: Mock forwarder address is strictly rejected in mainnet builds"
+    }
+  ],
+  "types": [
+    {
+      "name": "AllowEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "docs": [
+              "Whitelisted wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "expiry_ts",
+            "docs": [
+              "Unix timestamp when this allow entry expires"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "roles",
+            "docs": [
+              "Bitmask of permitted actions (see roles module)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllowEntryRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AllowEntrySet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "roles",
+            "type": "u8"
+          },
+          {
+            "name": "expiry_ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityTransferAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityTransferProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "current_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Protocol governance authority"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority",
+            "docs": [
+              "Pending authority for two-step transfer"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "forwarders",
+            "docs": [
+              "Registered forwarders (up to 2: on Devnet, 1 live Keystone + 1 mock simulator forwarder)"
+            ],
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "ForwarderEntry"
+                  }
+                },
+                2
+              ]
+            }
+          },
+          {
+            "name": "forwarder_count",
+            "docs": [
+              "Number of active forwarders in the array"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "enclave_key_hash",
+            "docs": [
+              "Published SHA-256 hash of the TEE enclave X25519 public key"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Global emergency pause flag"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "cluster_mode",
+            "docs": [
+              "Cluster mode: 0 = Local, 1 = Devnet, 2 = Mainnet"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "fee_bps",
+            "docs": [
+              "Protocol fee in basis points (0 for v1)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Protocol fee treasury"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "cluster_mode",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Escrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "docs": [
+              "Owner wallet that deposited the escrowed tokens"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "series",
+            "docs": [
+              "Associated series PDA"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "Token mint held in escrow (PT, YT, or quote token)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "lock_until",
+            "docs": [
+              "Unix timestamp before which the owner cannot withdraw"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "Current quantity of tokens locked in escrow"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowLocked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "lock_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FillExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "dealer",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quote_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FillReceipt",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "round_id",
+            "docs": [
+              "Unique round ID (32 bytes), acts as the global replay guard"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "series",
+            "docs": [
+              "Series PDA traded in this fill"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "docs": [
+              "Requester wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "dealer",
+            "docs": [
+              "Winning dealer wallet address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "docs": [
+              "0 = SellPT, 1 = SellYT"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "asset_amount",
+            "docs": [
+              "Quantity of asset tokens (PT or YT) filled"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quote_amount",
+            "docs": [
+              "Quantity of quote tokens paid"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "quote_mint",
+            "docs": [
+              "Quote currency mint"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "ts",
+            "docs": [
+              "Unix timestamp of receipt creation"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "report_hash",
+            "docs": [
+              "Hash of the signed forwarder report"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Fill lifecycle status: 0 = Approved, 1 = Executed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FillReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "round_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "dealer",
+            "type": "pubkey"
+          },
+          {
+            "name": "asset_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quote_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quote_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "not_after",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ForwarderEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "program",
+            "docs": [
+              "Keystone forwarder program address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "state",
+            "docs": [
+              "Keystone forwarder state account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed_workflow",
+            "docs": [
+              "Authorized workflow ID (32 bytes) that may submit reports through this forwarder"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ForwarderUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "program",
+            "type": "pubkey"
+          },
+          {
+            "name": "state",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed_workflow",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalPauseToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PtRedeemed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "pt_amount",
+            "type": "u64"
+          },
+          {
+            "name": "raw_collateral_received",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RateReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "benchmark_id",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "rate_bps",
+            "type": "i64"
+          },
+          {
+            "name": "window_end",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReceivedFillReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "type": {
+              "defined": {
+                "name": "FillReport"
+              }
+            }
+          },
+          {
+            "name": "report_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReceivedRateReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "type": {
+              "defined": {
+                "name": "RateReport"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReceivedSettleReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "report",
+            "type": {
+              "defined": {
+                "name": "SettleReport"
+              }
+            }
+          },
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "idx_settle",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Registry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "count",
+            "docs": [
+              "Active series count"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "series",
+            "docs": [
+              "Up to 64 active series pubkeys"
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Series",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "collateral_mint",
+            "docs": [
+              "Collateral token mint (Token or Token-2022)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_program",
+            "docs": [
+              "Token program owning the collateral mint (Token or Token-2022)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "docs": [
+              "Denominated quote currency mint (e.g. wSOL for staking, USDC for equities)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "index_kind",
+            "docs": [
+              "Yield index type: 0 = StakePoolRate, 1 = ScaledUiDividendAdjusted, 2 = OracleIndex"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "index_source",
+            "docs": [
+              "Source account or pubkey for the index (e.g. stake pool account or price feed)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "idx_open",
+            "docs": [
+              "Index value at series opening, scaled by WAD (1e18)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "open_ts",
+            "docs": [
+              "Unix timestamp when the series was created"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "maturity_ts",
+            "docs": [
+              "Unix timestamp when the series reaches maturity"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pt_mint",
+            "docs": [
+              "Principal Token (PT) Token-2022 mint address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "yt_mint",
+            "docs": [
+              "Yield Token (YT) Token-2022 mint address"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Vault account (ATA) owned by this Series PDA holding raw collateral"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current lifecycle status: 0 = Open, 1 = Settled, 2 = Disputed, 3 = Paused"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "idx_settle",
+            "docs": [
+              "Settled index value scaled by WAD (1e18)"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "split_num",
+            "docs": [
+              "Cumulative corporate split factor numerator (1 if no split)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "split_den",
+            "docs": [
+              "Cumulative corporate split factor denominator (1 if no split)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "settled_ts",
+            "docs": [
+              "Unix timestamp when settlement occurred"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "privacy_mode",
+            "docs": [
+              "Privacy mode: 0 = Plain, 1 = Confidential (immutable)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_rate_bps",
+            "docs": [
+              "Maximum allowable annualized rate in basis points (sanity cap)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "dividend_cap_bps",
+            "docs": [
+              "Maximum allowable dividend increase in basis points (sanity cap for equities)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "nonce",
+            "docs": [
+              "Nonce to allow distinct series with the same collateral and maturity"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "PDA bump seed"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeriesOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "collateral_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pt_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "yt_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "open_ts",
+            "type": "i64"
+          },
+          {
+            "name": "maturity_ts",
+            "type": "i64"
+          },
+          {
+            "name": "idx_open",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeriesPauseToggled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleReport",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "observed_ts",
+            "type": "i64"
+          },
+          {
+            "name": "index_wad",
+            "type": "u128"
+          },
+          {
+            "name": "split_num",
+            "type": "u32"
+          },
+          {
+            "name": "split_den",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensMerged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensStripped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "YtClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "yt_amount",
+            "type": "u64"
+          },
+          {
+            "name": "raw_collateral_received",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

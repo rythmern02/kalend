@@ -21,9 +21,12 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { fetchConfig, fetchAllSeries } from '../../lib/api'
 
+import { useWallet } from '../../lib/wallet'
+import { setAllowEntry, togglePauseGlobal } from '../../lib/kalend-client'
+
 export default function AdminConsolePage() {
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
   // Form states
   const [targetWallet, setTargetWallet] = useState('')
@@ -36,9 +39,10 @@ export default function AdminConsolePage() {
     whatBecomesPublic: string
   } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
 
-  const { data: config } = useQuery({
+  const { data: config, refetch: refetchConfig } = useQuery({
     queryKey: ['config'],
     queryFn: fetchConfig,
   })
@@ -48,20 +52,44 @@ export default function AdminConsolePage() {
     queryFn: fetchAllSeries,
   })
 
-  const handleAction = () => {
+  const handleAction = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
+
     setIsSubmitting(true)
-    setTimeout(() => {
+    setActionError(null)
+    try {
+      let txSig: string
+      if (confirmModalData?.actionName.includes('Pause')) {
+        const nextPaused = !config?.paused
+        txSig = await togglePauseGlobal(wallet, nextPaused)
+      } else {
+        if (!targetWallet.trim()) {
+          throw new Error('Please enter a target wallet address.')
+        }
+        const expiryTs = Math.floor(Date.now() / 1000) + expiryDays * 86400
+        txSig = await setAllowEntry(wallet, {
+          targetWallet: targetWallet.trim(),
+          roles: rolesBitmask,
+          expiryTs,
+        })
+      }
+      setReceiptUrl(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`)
+      refetchConfig()
+    } catch (err: any) {
+      console.error('Admin action failed:', err)
+      setActionError(err.message || 'Transaction rejected on-chain')
+    } finally {
       setIsSubmitting(false)
-      setReceiptUrl(`https://explorer.solana.com/tx/mock-admin-${Date.now()}?cluster=devnet`)
-    }, 1200)
+    }
   }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
       <Header
-        walletAddress={walletAddress}
         userRole="Compliance Authority (Admin)"
-        connectWallet={() => {}}
       />
       <ModeBar state={modeBarState} />
 
@@ -259,6 +287,7 @@ export default function AdminConsolePage() {
             onClose={() => {
               setConfirmModalData(null)
               setReceiptUrl(undefined)
+              setActionError(null)
             }}
             onConfirm={handleAction}
             actionName={confirmModalData.actionName}
@@ -267,6 +296,7 @@ export default function AdminConsolePage() {
             whatBecomesPublic={confirmModalData.whatBecomesPublic}
             isSubmitting={isSubmitting}
             txReceiptUrl={receiptUrl}
+            error={actionError}
           />
         )}
       </main>

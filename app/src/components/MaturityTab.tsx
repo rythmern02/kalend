@@ -1,63 +1,125 @@
-'use client'
-
 import React, { useState } from 'react'
-import { Scale, CheckCircle2, Coins, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Scale, CheckCircle2, Coins, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
 import { ptRedeemRaw, ytClaimRaw } from '../lib/solana'
+import { useWallet } from '../lib/wallet'
+import { redeemPt, claimYt, settleOnchain } from '../lib/kalend-client'
+import { fetchAllSeries } from '../lib/api'
 
-export function MaturityTab({ walletAddress }: { walletAddress: string | null }) {
-  const [selectedSeries, setSelectedSeries] = useState('CSQJmtGu6s6KJ9wcfv8zY5LBioCnfcRenmFFB1pFPUwY')
+export function MaturityTab({ walletAddress: propWalletAddress }: { walletAddress?: string | null }) {
+  const wallet = useWallet()
+  const [selectedSeries, setSelectedSeries] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Demo series state reflecting verified devnet series
+  // Verified devnet series data
   const seriesInfo = {
     pubkey: '56GPui78oee8WAHuBoR1bgVJPXcKUSGNSuZCo6pae5iKGu7k4j8FgyuXqobgnfK1ZHPUALa5wFZAXkm6Q91c9F1d',
-    collateral: 'JitoSOL Test Mint',
+    collateral: 'JitoSOL Devnet Mint',
     indexSource: 'HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f (SPL Stake Pool)',
     idxOpen: 1000000000000000000n, // 1.0 WAD
-    idxSettle: 1056889370488127398n, // 1.056889 WAD (real attested on devnet)
+    idxSettle: 1056889370488127398n, // 1.056889 WAD
     isSettled: true,
     maturityTs: 1791012107,
   }
 
-  const [ptAmount, setPtAmount] = useState('1000000')
-  const [ytAmount, setYtAmount] = useState('1000000')
+  const [ptAmount, setPtAmount] = useState('1000')
+  const [ytAmount, setYtAmount] = useState('1000')
 
-  const expectedPtPayout = ptRedeemRaw(BigInt(ptAmount || 0), seriesInfo.idxOpen, seriesInfo.idxSettle)
-  const expectedYtPayout = ytClaimRaw(BigInt(ytAmount || 0), seriesInfo.idxOpen, seriesInfo.idxSettle)
+  const expectedPtPayout = ptRedeemRaw(BigInt(Math.floor(Number(ptAmount || 0) * 1e9)), seriesInfo.idxOpen, seriesInfo.idxSettle)
+  const expectedYtPayout = ytClaimRaw(BigInt(Math.floor(Number(ytAmount || 0) * 1e9)), seriesInfo.idxOpen, seriesInfo.idxSettle)
 
   const handleSettleCrank = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
     setIsLoading(true)
-    setStatus('Invoking permissionless settle_onchain crank reading SPL stake pool...')
-    setTimeout(() => {
+    setStatus('Invoking permissionless settle_onchain crank reading SPL stake pool on-chain...')
+    setTxHash(null)
+    setErrorMessage(null)
+
+    try {
+      const allSeries = await fetchAllSeries()
+      const series = allSeries[0]
+      if (!series) throw new Error('No active on-chain series found in registry.')
+
+      const sig = await settleOnchain(wallet, {
+        seriesPubkey: series.pubkey,
+        indexSourcePubkey: series.index_source,
+      })
+      setTxHash(sig)
+      setStatus(`✓ Series settled successfully onchain! Transaction confirmed.`)
+    } catch (err: any) {
+      console.error('Settle crank failed:', err)
+      setErrorMessage(err.message || 'Transaction rejected on-chain')
+      setStatus(null)
+    } finally {
       setIsLoading(false)
-      const mockTx = '3DN5CMkbZrYddwGwT56JgyPErjCpPptTeaeRxio6fJNZi2DKS2CHbuQwe5YjMmE7Ar9f5JrkwbNXPKd8XHMqR42T'
-      setTxHash(mockTx)
-      setStatus(`✓ Series settled successfully onchain! Index WAD recorded: 1056889370488127398 (~1.056889 SOL/JitoSOL).`)
-    }, 1200)
+    }
   }
 
   const handleRedeemPt = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
     setIsLoading(true)
-    setStatus('Redeeming PT tokens for in-kind principal collateral...')
-    setTimeout(() => {
+    setStatus('Submitting on-chain transaction: burning PT to redeem underlying principal...')
+    setTxHash(null)
+    setErrorMessage(null)
+
+    try {
+      const allSeries = await fetchAllSeries()
+      const series = allSeries[0]
+      if (!series) throw new Error('No active on-chain series found.')
+
+      const rawAmount = BigInt(Math.floor(Number(ptAmount) * 1e9))
+      const sig = await redeemPt(wallet, {
+        seriesPubkey: series.pubkey,
+        amount: rawAmount,
+      })
+      setTxHash(sig)
+      setStatus(`✓ PT Redeemed on-chain! Burned ${ptAmount} PT tokens for raw collateral.`)
+    } catch (err: any) {
+      console.error('PT redemption failed:', err)
+      setErrorMessage(err.message || 'Transaction rejected on-chain')
+      setStatus(null)
+    } finally {
       setIsLoading(false)
-      const mockTx = '25XHfQkdYX43otKruhJhdqXQV9SnJ7p9q3VgbbAhX2sUYxJ8nWgSoo5uGSbrxMHNruJ1RtRgByK8ovbwEUB9KdhH'
-      setTxHash(mockTx)
-      setStatus(`✓ PT Redeemed! Burned ${ptAmount} PT, received ${expectedPtPayout.toString()} units raw collateral.`)
-    }, 1200)
+    }
   }
 
   const handleClaimYt = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
     setIsLoading(true)
-    setStatus('Claiming accrued yield on settled YT tokens...')
-    setTimeout(() => {
+    setStatus('Submitting on-chain transaction: burning YT to claim accrued yield...')
+    setTxHash(null)
+    setErrorMessage(null)
+
+    try {
+      const allSeries = await fetchAllSeries()
+      const series = allSeries[0]
+      if (!series) throw new Error('No active on-chain series found.')
+
+      const rawAmount = BigInt(Math.floor(Number(ytAmount) * 1e9))
+      const sig = await claimYt(wallet, {
+        seriesPubkey: series.pubkey,
+        amount: rawAmount,
+      })
+      setTxHash(sig)
+      setStatus(`✓ YT Accrued Yield Claimed on-chain! Burned ${ytAmount} YT tokens for in-kind collateral.`)
+    } catch (err: any) {
+      console.error('YT claim failed:', err)
+      setErrorMessage(err.message || 'Transaction rejected on-chain')
+      setStatus(null)
+    } finally {
       setIsLoading(false)
-      const mockTx = '3rVwVpgutKWehDEWxqQNLDmVgdQMRz6pQ7HduSTR6iyc58jnKvSMveURexZ78iwZ3W5AyyMymgzurxY1VN6PhiUn'
-      setTxHash(mockTx)
-      setStatus(`✓ YT Claimed! Burned ${ytAmount} YT, received ${expectedYtPayout.toString()} units in-kind yield collateral.`)
-    }, 1200)
+    }
   }
 
   return (
@@ -139,8 +201,8 @@ export function MaturityTab({ walletAddress }: { walletAddress: string | null })
             </div>
             <button
               onClick={handleRedeemPt}
-              disabled={isLoading || !walletAddress}
-              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-xs font-semibold rounded uppercase tracking-wider"
+              disabled={isLoading || !wallet.connected}
+              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-black font-mono text-xs font-semibold rounded uppercase tracking-wider disabled:opacity-50"
             >
               Redeem Principal
             </button>
@@ -167,13 +229,24 @@ export function MaturityTab({ walletAddress }: { walletAddress: string | null })
             </div>
             <button
               onClick={handleClaimYt}
-              disabled={isLoading || !walletAddress}
-              className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-semibold rounded uppercase tracking-wider"
+              disabled={isLoading || !wallet.connected}
+              className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-semibold rounded uppercase tracking-wider disabled:opacity-50"
             >
               Claim Accrued Yield
             </button>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-xs font-mono text-red-300 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold">Transaction Error</p>
+              <p className="break-all text-[11px]">{errorMessage}</p>
+            </div>
+          </div>
+        )}
 
         {/* Status / Tx Link */}
         {status && (

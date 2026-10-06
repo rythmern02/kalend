@@ -490,6 +490,30 @@
           "name": "series"
         },
         {
+          "name": "allow_entry",
+          "docs": [
+            "AllowEntry validating the user has Requester, Dealer, or Strip permissions"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  108,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
           "name": "escrow",
           "writable": true,
           "pda": {

@@ -3,34 +3,64 @@
 import React, { useState } from 'react'
 import { ArrowDownUp, Layers, CheckCircle2, AlertCircle } from 'lucide-react'
 
-export function StripMergeTab({ walletAddress }: { walletAddress: string | null }) {
+import { useWallet } from '../lib/wallet'
+import { stripTokens, mergeTokens } from '../lib/kalend-client'
+import { fetchAllSeries } from '../lib/api'
+
+export function StripMergeTab({ walletAddress: propWalletAddress }: { walletAddress?: string | null }) {
+  const wallet = useWallet()
   const [mode, setMode] = useState<'strip' | 'merge'>('strip')
   const [amount, setAmount] = useState('1000')
   const [status, setStatus] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   const handleAction = async () => {
-    if (!walletAddress) {
-      alert('Please connect a Solana wallet first!')
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
       return
     }
 
     setIsLoading(true)
-    setStatus(mode === 'strip' ? 'Stripping collateral into equal PT and YT...' : 'Merging PT and YT to release collateral...')
+    setStatus(mode === 'strip' ? 'Stripping collateral on-chain into equal PT and YT...' : 'Merging PT and YT on-chain to release collateral...')
     setTxHash(null)
+    setErrorMessage(null)
 
-    // Simulate / execute strip or merge action
-    setTimeout(() => {
-      setIsLoading(false)
-      const mockTx = '45yYDTNb115qD5ZUrGQ822Vn1kLphBgf8R5sTjQHXMtW7mgFXk9EFsD4FB1sD6iJw26KQJj3x59y9JWewhv3sqF9'
-      setTxHash(mockTx)
+    try {
+      const allSeries = await fetchAllSeries()
+      const series = allSeries[0]
+      if (!series) {
+        throw new Error('No active on-chain series found in registry.')
+      }
+
+      const parsedAmount = BigInt(Math.floor(Number(amount) * 1e9))
+      let sig: string
+      if (mode === 'strip') {
+        sig = await stripTokens(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      } else {
+        sig = await mergeTokens(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      }
+
+      setTxHash(sig)
       setStatus(
         mode === 'strip'
-          ? `Successfully stripped ${amount} collateral tokens into ${amount} PT-JitoSOL and ${amount} YT-JitoSOL!`
-          : `Successfully merged ${amount} PT and YT tokens, releasing ${amount} raw collateral back to vault!`
+          ? `Successfully stripped ${amount} collateral tokens into PT and YT!`
+          : `Successfully merged ${amount} PT and YT tokens back to raw collateral!`
       )
-    }, 1500)
+    } catch (err: any) {
+      console.error('Strip/Merge transaction failed:', err)
+      setErrorMessage(err.message || 'Transaction rejected on-chain')
+      setStatus(null)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -112,6 +142,17 @@ export function StripMergeTab({ walletAddress }: { walletAddress: string | null 
             {isLoading ? 'Processing Transaction...' : mode === 'strip' ? 'Strip to PT & YT' : 'Merge PT & YT'}
           </button>
         </div>
+
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-2.5 text-xs text-red-300">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold">Transaction Error</p>
+              <p className="font-mono text-[11px] break-all">{errorMessage}</p>
+            </div>
+          </div>
+        )}
 
         {/* Feedback Alert */}
         {status && (

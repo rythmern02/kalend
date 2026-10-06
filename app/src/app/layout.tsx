@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { QueryProvider } from '../components/QueryProvider'
+import { WalletProvider } from '../lib/wallet'
 
 export const metadata: Metadata = {
   title: 'Kalend · Private RFQ Exchange for Dated Yield',
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="bg-black text-white min-h-screen flex flex-col antialiased selection:bg-white selection:text-black">
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <WalletProvider>{children}</WalletProvider>
+        </QueryProvider>
       </body>
     </html>
   )

@@ -19,16 +19,20 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries } from '../../../../lib/api'
 
+import { useWallet } from '../../../../lib/wallet'
+import { redeemPt, claimYt } from '../../../../lib/kalend-client'
+
 export default function MaturityRedeemPage() {
   const params = useParams()
   const seriesId = params?.id as string
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
-  const [redeemPtAmount, setRedeemPtAmount] = useState<string>('1000000')
-  const [claimYtAmount, setClaimYtAmount] = useState<string>('1000000')
+  const [redeemPtAmount, setRedeemPtAmount] = useState<string>('1000')
+  const [claimYtAmount, setClaimYtAmount] = useState<string>('1000')
   const [activeModal, setActiveModal] = useState<'pt' | 'yt' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
 
   const { data: allSeries } = useQuery({
@@ -41,22 +45,50 @@ export default function MaturityRedeemPage() {
   // Plain-sentence settlement math:
   // pt_redeem_raw = a * idx_open / idx_settle
   // yt_claim_raw = a - pt_redeem_raw
-  const idxOpen = 1.0
-  const idxSettle = 1.0712 // 7.12% growth
-  const ptRedeemUnit = (idxOpen / idxSettle).toFixed(6)
-  const ytClaimUnit = (1 - Number(ptRedeemUnit)).toFixed(6)
+  const idxOpen = series && Number(series.idx_open) > 0 ? Number(series.idx_open) / 1e18 : 1.0
+  const idxSettle = series && Number(series.idx_settle) > 0 ? Number(series.idx_settle) / 1e18 : idxOpen
+  const ptRedeemUnit = idxSettle > 0 ? (Math.min(idxOpen, idxSettle) / idxSettle).toFixed(6) : '1.000000'
+  const ytClaimUnit = idxSettle > 0 ? (Math.max(0, idxSettle - idxOpen) / idxSettle).toFixed(6) : '0.000000'
 
-  const handleAction = () => {
+  const handleAction = async () => {
+    if (!wallet.connected) {
+      wallet.setShowConnectModal(true)
+      return
+    }
+    if (!series) {
+      setActionError('No active series found')
+      return
+    }
+
     setIsSubmitting(true)
-    setTimeout(() => {
+    setActionError(null)
+    try {
+      let txSig: string
+      if (activeModal === 'pt') {
+        const parsedAmount = BigInt(Math.floor(Number(redeemPtAmount) * 1e9))
+        txSig = await redeemPt(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      } else {
+        const parsedAmount = BigInt(Math.floor(Number(claimYtAmount) * 1e9))
+        txSig = await claimYt(wallet, {
+          seriesPubkey: series.pubkey,
+          amount: parsedAmount,
+        })
+      }
+      setReceiptUrl(`https://explorer.solana.com/tx/${txSig}?cluster=devnet`)
+    } catch (err: any) {
+      console.error('Maturity action failed:', err)
+      setActionError(err.message || 'Transaction rejected on-chain')
+    } finally {
       setIsSubmitting(false)
-      setReceiptUrl(`https://explorer.solana.com/tx/mock-redeem-${Date.now()}?cluster=devnet`)
-    }, 1200)
+    }
   }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <Header walletAddress={walletAddress} connectWallet={() => {}} />
+      <Header />
       <ModeBar state={modeBarState} />
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -219,6 +251,7 @@ export default function MaturityRedeemPage() {
           onClose={() => {
             setActiveModal(null)
             setReceiptUrl(undefined)
+            setActionError(null)
           }}
           onConfirm={handleAction}
           actionName={
@@ -235,6 +268,7 @@ export default function MaturityRedeemPage() {
           whatBecomesPublic="Redemption transaction signatures and updated token balances on the Solana blockchain."
           isSubmitting={isSubmitting}
           txReceiptUrl={receiptUrl}
+          error={actionError}
         />
       </main>
     </div>
