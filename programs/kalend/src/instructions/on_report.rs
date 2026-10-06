@@ -8,8 +8,9 @@ use crate::state::{
 };
 use crate::events::{
     FillReport, SettleReport, RateReport,
-    ReceivedFillReport, ReceivedSettleReport, ReceivedRateReport,
+    ReceivedFillReport, ReceivedSettleReport, ReceivedRateReport, SettlementDisputed,
 };
+use crate::math::settle_index_within_bounds;
 
 #[derive(Accounts)]
 pub struct OnReport<'info> {
@@ -66,6 +67,32 @@ pub fn on_report_handler(
     }
 }
 
+/// Load the canonical Config from a remaining account. The forwarder only proves who signed;
+/// without this check a caller could supply a look-alike Config that lists its own forwarder.
+fn load_config(info: &AccountInfo) -> Result<Config> {
+    let (expected, _) = Pubkey::find_program_address(&[Config::SEED], &crate::ID);
+    if info.key() != expected || *info.owner != crate::ID {
+        return err!(KalendError::Unauthorized);
+    }
+    let data = info.try_borrow_data()?;
+    if data.len() < 8 || data[..8] != *<Config as anchor_lang::Discriminator>::DISCRIMINATOR {
+        return err!(KalendError::Unauthorized);
+    }
+    Config::deserialize(&mut &data[8..]).map_err(|_| error!(KalendError::InvalidReportPayload))
+}
+
+/// Load a Series owned by this program (owner + discriminator checked).
+fn load_series(info: &AccountInfo) -> Result<Series> {
+    if *info.owner != crate::ID {
+        return err!(KalendError::SeriesMismatch);
+    }
+    let data = info.try_borrow_data()?;
+    if data.len() < 8 || data[..8] != *<Series as anchor_lang::Discriminator>::DISCRIMINATOR {
+        return err!(KalendError::SeriesMismatch);
+    }
+    Series::deserialize(&mut &data[8..]).map_err(|_| error!(KalendError::InvalidReportPayload))
+}
+
 fn handle_fill_report(
     ctx: &Context<OnReport>,
     report_bytes: &[u8],
@@ -103,10 +130,7 @@ fn handle_fill_report(
     let system_program_info = &remaining[4];
 
     // Load and verify Config
-    let config_data = config_info.try_borrow_data()?;
-    let mut config_cursor = &config_data[8..]; // skip Anchor discriminator
-    let config = Config::deserialize(&mut config_cursor)
-        .map_err(|_| error!(KalendError::InvalidReportPayload))?;
+    let config = load_config(config_info)?;
 
     if config.paused {
         return err!(KalendError::ProtocolPaused);
@@ -116,9 +140,22 @@ fn handle_fill_report(
         return err!(KalendError::InvalidForwarderProgram);
     }
 
-    // Verify series match
+    // Verify series match, ownership and tradability (fills only for open, unmatured series)
     if series_info.key() != report.series {
         return err!(KalendError::SeriesMismatch);
+    }
+    let series = load_series(series_info)?;
+    if series.status != SeriesStatus::Open as u8 {
+        return err!(KalendError::SeriesNotOpen);
+    }
+    if now >= series.maturity_ts {
+        return err!(KalendError::SeriesAlreadyMatured);
+    }
+    if report.quote_mint != series.quote_mint {
+        return err!(KalendError::TokenMismatch);
+    }
+    if report.asset_amount == 0 || report.quote_amount == 0 {
+        return err!(KalendError::ZeroAmount);
     }
 
     // Replay protection: FillReceipt PDA must be derived from ["fill", round_id]
@@ -216,10 +253,7 @@ fn handle_settle_report(
     let config_info = &remaining[0];
     let series_info = &remaining[1];
 
-    let config_data = config_info.try_borrow_data()?;
-    let mut config_cursor = &config_data[8..];
-    let config = Config::deserialize(&mut config_cursor)
-        .map_err(|_| error!(KalendError::InvalidReportPayload))?;
+    let config = load_config(config_info)?;
 
     if !config.is_authorized_forwarder(ctx.accounts.state.owner, &ctx.accounts.state.key(), workflow_id) {
         return err!(KalendError::InvalidForwarderProgram);
@@ -229,11 +263,8 @@ fn handle_settle_report(
         return err!(KalendError::SeriesMismatch);
     }
 
-    // Deserialize and update series
+    let mut series = load_series(series_info)?;
     let mut series_data = series_info.try_borrow_mut_data()?;
-    let mut series_cursor = &series_data[8..];
-    let mut series = Series::deserialize(&mut series_cursor)
-        .map_err(|_| error!(KalendError::InvalidReportPayload))?;
 
     if series.status != SeriesStatus::Open as u8 {
         return err!(KalendError::SeriesNotOpen);
@@ -254,11 +285,23 @@ fn handle_settle_report(
         let max_allowed = series.idx_open.saturating_add(
             series.idx_open.saturating_mul(series.dividend_cap_bps as u128) / 10_000
         );
-        if report.index_wad > max_allowed {
+        if report.index_wad < series.idx_open || report.index_wad > max_allowed {
+            // Persist Disputed (returning an error would roll the status change back).
             series.status = SeriesStatus::Disputed as u8;
             let mut writer = &mut series_data[8..];
             series.serialize(&mut writer)?;
-            return err!(KalendError::DividendBandExceeded);
+            emit!(SettlementDisputed { series: series_info.key(), index_wad: report.index_wad });
+            return Ok(());
+        }
+    } else {
+        // Oracle-independent bound for stake-pool / oracle indexes (spec 7.6 item 8).
+        let term = series.maturity_ts.saturating_sub(series.open_ts);
+        if !settle_index_within_bounds(series.idx_open, report.index_wad, series.max_rate_bps, term)? {
+            series.status = SeriesStatus::Disputed as u8;
+            let mut writer = &mut series_data[8..];
+            series.serialize(&mut writer)?;
+            emit!(SettlementDisputed { series: series_info.key(), index_wad: report.index_wad });
+            return Ok(());
         }
     }
 
@@ -303,10 +346,7 @@ fn handle_rate_report(
     let rent_vault_info = &remaining[2];
     let system_program_info = &remaining[3];
 
-    let config_data = config_info.try_borrow_data()?;
-    let mut config_cursor = &config_data[8..];
-    let config = Config::deserialize(&mut config_cursor)
-        .map_err(|_| error!(KalendError::InvalidReportPayload))?;
+    let config = load_config(config_info)?;
 
     if !config.is_authorized_forwarder(ctx.accounts.state.owner, &ctx.accounts.state.key(), workflow_id) {
         return err!(KalendError::InvalidForwarderProgram);

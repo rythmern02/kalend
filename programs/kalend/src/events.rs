@@ -178,3 +178,14 @@ pub struct AuthorityTransferAccepted {
     pub old_authority: Pubkey,
     pub new_authority: Pubkey,
 }
+
+#[event]
+pub struct SettlementDisputed {
+    pub series: Pubkey,
+    pub index_wad: u128,
+}
+
+#[event]
+pub struct EnclaveKeyRotated {
+    pub enclave_key_hash: [u8; 32],
+}

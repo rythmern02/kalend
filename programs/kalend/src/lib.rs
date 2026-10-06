@@ -36,6 +36,11 @@ pub mod kalend {
         instructions::admin::set_forwarder_entry(ctx, index, program, state, allowed_workflow)
     }
 
+    /// Publishes the hash of the active enclave HPKE public key
+    pub fn set_enclave_key_hash(ctx: Context<AdminAction>, enclave_key_hash: [u8; 32]) -> Result<()> {
+        instructions::admin::set_enclave_key_hash(ctx, enclave_key_hash)
+    }
+
     /// Proposes a new governance authority (two-step transfer)
     pub fn propose_authority(ctx: Context<AdminAction>, new_authority: Pubkey) -> Result<()> {
         instructions::admin::propose_authority(ctx, new_authority)

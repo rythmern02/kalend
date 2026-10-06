@@ -93,18 +93,21 @@ pub struct ExecuteFill<'info> {
     )]
     pub dealer_quote_escrow_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Requester destination account for quote currency
+    /// Requester destination account for quote currency (must be owned by the requester:
+    /// execute_fill is permissionless, so the caller must not choose where funds go)
     #[account(
         mut,
         token::mint = quote_mint,
+        token::authority = requester,
         token::token_program = quote_token_program,
     )]
     pub requester_quote_token: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Dealer destination account for asset currency (PT or YT)
+    /// Dealer destination account for asset currency (PT or YT), owned by the dealer
     #[account(
         mut,
         token::mint = asset_mint,
+        token::authority = dealer,
         token::token_program = asset_token_program,
     )]
     pub dealer_asset_token: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -126,6 +129,15 @@ pub fn execute_fill_handler(ctx: Context<ExecuteFill>) -> Result<()> {
     }
     if series.status != SeriesStatus::Open as u8 {
         return err!(KalendError::SeriesNotOpen);
+    }
+    // The asset leg must be this series' PT (SellPT) or YT (SellYT).
+    let expected_asset = match receipt.side {
+        0 => series.pt_mint,
+        1 => series.yt_mint,
+        _ => return err!(KalendError::InvalidReportPayload),
+    };
+    if ctx.accounts.asset_mint.key() != expected_asset {
+        return err!(KalendError::TokenMismatch);
     }
 
     if ctx.accounts.requester.key() != receipt.requester {

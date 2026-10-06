@@ -72,6 +72,49 @@ pub fn split_adjusted_index(multiplier_wad: u128, split_num: u32, split_den: u32
         .ok_or_else(|| error!(KalendError::MathOverflow))
 }
 
+pub const SECONDS_PER_YEAR: u128 = 31_536_000;
+pub const BPS: u128 = 10_000;
+/// Largest index fall accepted before a settlement is marked Disputed (slashing tolerance).
+pub const MAX_INDEX_FALL_BPS: u128 = 1_000; // 10%
+/// Stake-pool indexes move in discrete per-epoch steps (~2-3 days), so the growth cap is
+/// evaluated over at least this window; otherwise one honest epoch bump on a short series
+/// would annualize to an implausible rate.
+pub const MIN_ACCRUAL_WINDOW_SECS: i64 = 259_200; // 3 days
+
+/// Oracle-independent sanity bound on a reported settlement index (spec 7.4 / 7.6 item 8).
+/// Accepts `idx_settle` iff its implied simple annual growth over `term_secs` is at most
+/// `max_rate_bps`, and it has not fallen more than MAX_INDEX_FALL_BPS below `idx_open`.
+/// A `max_rate_bps` of 0 means the series disabled the upper cap.
+pub fn settle_index_within_bounds(
+    idx_open: u128,
+    idx_settle: u128,
+    max_rate_bps: u32,
+    term_secs: i64,
+) -> Result<bool> {
+    if idx_open == 0 || idx_settle == 0 || term_secs <= 0 {
+        return Ok(false);
+    }
+    let floor = idx_open
+        .checked_mul(BPS - MAX_INDEX_FALL_BPS)
+        .ok_or(error!(KalendError::MathOverflow))?
+        / BPS;
+    if idx_settle < floor {
+        return Ok(false);
+    }
+    if max_rate_bps == 0 {
+        return Ok(true);
+    }
+    let max_growth = idx_open
+        .checked_mul(max_rate_bps as u128)
+        .and_then(|v| v.checked_mul(term_secs.max(MIN_ACCRUAL_WINDOW_SECS) as u128))
+        .ok_or(error!(KalendError::MathOverflow))?
+        / (BPS * SECONDS_PER_YEAR);
+    let ceiling = idx_open
+        .checked_add(max_growth)
+        .ok_or(error!(KalendError::MathOverflow))?;
+    Ok(idx_settle <= ceiling)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,5 +213,35 @@ mod tests {
         // Reverse split 1-for-4: multiplier quarters to 0.2625 * WAD, split factor = 1 / 4
         let d_after_rev_split = split_adjusted_index(2625 * WAD / 10000, 1, 4).unwrap();
         assert_eq!(d_after_rev_split, d_before);
+    }
+
+    #[test]
+    fn settle_bounds_accept_plausible_growth() {
+        // 7% APR over half a year, cap 20%: accepted
+        let open = WAD;
+        let settle = WAD + WAD * 35 / 1000;
+        assert!(settle_index_within_bounds(open, settle, 2_000, 15_768_000).unwrap());
+    }
+
+    #[test]
+    fn settle_bounds_reject_inflated_index() {
+        // 2x in 30 days with a 20% cap: disputed
+        assert!(!settle_index_within_bounds(WAD, 2 * WAD, 2_000, 2_592_000).unwrap());
+    }
+
+    #[test]
+    fn settle_bounds_reject_collapse_and_zero() {
+        assert!(!settle_index_within_bounds(WAD, WAD / 2, 2_000, 86_400).unwrap());
+        assert!(!settle_index_within_bounds(WAD, 0, 2_000, 86_400).unwrap());
+        // small slash within tolerance is accepted (PT takes the loss-free path)
+        assert!(settle_index_within_bounds(WAD, WAD * 95 / 100, 2_000, 86_400).unwrap());
+    }
+
+    #[test]
+    fn settle_bounds_short_term_allows_one_epoch_step() {
+        // 1h series crossing one epoch (~0.06% step) is accepted under a 20% cap...
+        assert!(settle_index_within_bounds(WAD, WAD + WAD * 6 / 10_000, 2_000, 3_600).unwrap());
+        // ...but a 1% jump is not (20% APR over 3 days is ~0.16%)
+        assert!(!settle_index_within_bounds(WAD, WAD + WAD / 100, 2_000, 3_600).unwrap());
     }
 }

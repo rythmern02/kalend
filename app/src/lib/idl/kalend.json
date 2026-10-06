@@ -332,14 +332,15 @@
         {
           "name": "requester_quote_token",
           "docs": [
-            "Requester destination account for quote currency"
+            "Requester destination account for quote currency (must be owned by the requester:",
+            "execute_fill is permissionless, so the caller must not choose where funds go)"
           ],
           "writable": true
         },
         {
           "name": "dealer_asset_token",
           "docs": [
-            "Dealer destination account for asset currency (PT or YT)"
+            "Dealer destination account for asset currency (PT or YT), owned by the dealer"
           ],
           "writable": true
         }
@@ -1416,6 +1417,61 @@
       ]
     },
     {
+      "name": "set_enclave_key_hash",
+      "docs": [
+        "Publishes the hash of the active enclave HPKE public key"
+      ],
+      "discriminator": [
+        182,
+        160,
+        167,
+        70,
+        115,
+        233,
+        36,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "enclave_key_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "set_forwarder_entry",
       "docs": [
         "Updates or registers a forwarder entry in Config"
@@ -1938,6 +1994,19 @@
       ]
     },
     {
+      "name": "EnclaveKeyRotated",
+      "discriminator": [
+        26,
+        253,
+        80,
+        86,
+        241,
+        60,
+        214,
+        61
+      ]
+    },
+    {
       "name": "EscrowLocked",
       "discriminator": [
         128,
@@ -2078,6 +2147,19 @@
         114,
         26,
         192
+      ]
+    },
+    {
+      "name": "SettlementDisputed",
+      "discriminator": [
+        31,
+        132,
+        87,
+        43,
+        166,
+        148,
+        29,
+        42
       ]
     },
     {
@@ -2517,6 +2599,23 @@
           {
             "name": "cluster_mode",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnclaveKeyRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "enclave_key_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }
@@ -3290,6 +3389,22 @@
           {
             "name": "split_den",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementDisputed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "index_wad",
+            "type": "u128"
           }
         ]
       }

@@ -3,7 +3,7 @@ use crate::errors::KalendError;
 use crate::state::{Config, ForwarderEntry, Series};
 use crate::events::{
     ForwarderUpdated, GlobalPauseToggled, SeriesPauseToggled,
-    AuthorityTransferProposed, AuthorityTransferAccepted,
+    AuthorityTransferProposed, AuthorityTransferAccepted, EnclaveKeyRotated,
 };
 
 pub const MOCK_FORWARDER_PROGRAM_DEVNET: Pubkey =
@@ -137,5 +137,14 @@ pub fn pause_series(ctx: Context<PauseSeries>, paused: bool) -> Result<()> {
         series: series.key(),
         paused,
     });
+    Ok(())
+}
+
+/// Publishes the hash of the current enclave HPKE public key (rotation per kid). Transparency
+/// only: it lets users compare the key their browser seals to with the one the authority
+/// committed on-chain. It grants no power over funds.
+pub fn set_enclave_key_hash(ctx: Context<AdminAction>, enclave_key_hash: [u8; 32]) -> Result<()> {
+    ctx.accounts.config.enclave_key_hash = enclave_key_hash;
+    emit!(EnclaveKeyRotated { enclave_key_hash });
     Ok(())
 }

@@ -27,3 +27,4 @@ id.json
 *.swo
 .vscode/
 .idea/
+*.tsbuildinfo

@@ -9,3 +9,7 @@ resolver = "2"
 overflow-checks = true
 lto = "fat"
 codegen-units = 1
+
+# Size-optimized: keeps the upgrade buffer (and its rent) ~17% smaller than opt-level 3.
+[profile.release.package.kalend]
+opt-level = "z"
