@@ -8,18 +8,32 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0a0a0c',
-        foreground: '#ededed',
-        card: '#121216',
-        border: '#24242e',
-        muted: '#8e8e9a',
-        accent: '#e6a836',
-        accentDark: '#b87f1c',
+        bg: 'var(--bg)',
+        ink: 'var(--ink)',
+        mute: 'var(--mute)',
+        line: 'var(--line)',
+        'line-strong': 'var(--line-strong)',
+        surface: 'var(--surface)',
+        status: {
+          success: 'var(--status-success)',
+          warning: 'var(--status-warning)',
+          danger: 'var(--status-danger)',
+        },
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-        serif: ['Newsreader', 'Georgia', 'serif'],
-        hand: ['Caveat', 'cursive'],
+        pinyon: ['var(--font-pinyon)', 'cursive'],
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+        sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
+      },
+      borderRadius: {
+        DEFAULT: '4px',
+        sm: '4px',
+        md: '4px',
+        lg: '4px',
+      },
+      transitionDuration: {
+        DEFAULT: '150ms',
       },
     },
   },

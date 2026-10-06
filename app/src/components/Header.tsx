@@ -1,92 +1,89 @@
 'use client'
 
 import React from 'react'
-import { Wallet, Shield, Layers, Scale, Sparkles } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Wallet, ShieldCheck, UserCheck } from 'lucide-react'
 
 interface HeaderProps {
-  activeTab: 'strip' | 'rfq' | 'maturity' | 'transparency'
-  setActiveTab: (tab: 'strip' | 'rfq' | 'maturity' | 'transparency') => void
   walletAddress: string | null
+  userRole?: string
   connectWallet: () => void
 }
 
-export function Header({ activeTab, setActiveTab, walletAddress, connectWallet }: HeaderProps) {
+export function Header({
+  walletAddress,
+  userRole = 'Institutional Requester',
+  connectWallet,
+}: HeaderProps) {
+  const pathname = usePathname()
+
+  const navLinks = [
+    { href: '/', label: 'Overview' },
+    { href: '/vaults', label: 'Vaults' },
+    { href: '/rfq/new', label: 'Request Quote' },
+    { href: '/dealer', label: 'Dealer Desk' },
+    { href: '/portfolio', label: 'Portfolio' },
+    { href: '/receipts', label: 'Receipts' },
+    { href: '/trust', label: 'Trust & Verification' },
+    { href: '/admin', label: 'Admin' },
+  ]
+
   return (
-    <header className="border-b border-[#24242e] bg-[#0c0c10]/80 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-        {/* Logo & Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-serif text-xl font-bold tracking-tight">
-            K
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif text-xl tracking-tight text-foreground font-semibold">
-                KALEND
-              </span>
-              <span className="text-[10px] font-mono tracking-widest px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 uppercase">
-                v1.1
-              </span>
-            </div>
-            <p className="text-[10px] text-muted -mt-0.5">Dated Yield Exchange · Solana × Chainlink CRE</p>
-          </div>
+    <header className="border-b border-[#222222] bg-black sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        {/* Brand Wordmark */}
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-baseline gap-2">
+            <span
+              className="text-3xl text-white font-normal tracking-normal select-none"
+              style={{ fontFamily: "'Pinyon Script', cursive" }}
+            >
+              Kalend
+            </span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-[#a8a8a8] border border-[#262626] px-1.5 py-0.2 rounded-[2px]">
+              RFQ
+            </span>
+          </Link>
+
+          {/* Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-1">
+            {navLinks.map((link) => {
+              const isActive =
+                link.href === '/'
+                  ? pathname === '/'
+                  : pathname.startsWith(link.href)
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`px-3 py-1.5 rounded-[2px] text-xs font-sans transition-colors ${
+                    isActive
+                      ? 'text-white bg-[#141414] font-medium border border-[#2b2b2b]'
+                      : 'text-[#a8a8a8] hover:text-white hover:bg-[#0a0a0a]'
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              )
+            })}
+          </nav>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="hidden md:flex items-center gap-1 bg-[#121218] p-1 rounded-lg border border-[#24242e]">
-          <button
-            onClick={() => setActiveTab('strip')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'strip'
-                ? 'bg-zinc-800 text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            Strip & Merge
-          </button>
-          <button
-            onClick={() => setActiveTab('rfq')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'rfq'
-                ? 'bg-zinc-800 text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
-            Sealed RFQ
-          </button>
-          <button
-            onClick={() => setActiveTab('maturity')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'maturity'
-                ? 'bg-zinc-800 text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5 text-emerald-400" />
-            Maturity & Settle
-          </button>
-          <button
-            onClick={() => setActiveTab('transparency')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-              activeTab === 'transparency'
-                ? 'bg-zinc-800 text-foreground shadow-sm'
-                : 'text-muted hover:text-foreground'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-            Transparency
-          </button>
-        </nav>
-
-        {/* Wallet Connection */}
+        {/* Right Section: Role and Wallet Connection */}
         <div className="flex items-center gap-3">
+          {walletAddress && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] bg-[#0c1f13] border border-[#1b4329] text-[#4ade80] text-xs font-mono">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>{userRole}</span>
+            </div>
+          )}
+
           <button
             onClick={connectWallet}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-mono font-medium border border-[#2d2d38] bg-[#14141c] hover:bg-[#1a1a24] text-foreground transition-all"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-[2px] text-xs font-mono border border-[#333333] hover:border-white bg-[#0a0a0a] text-white transition-colors"
           >
-            <Wallet className="w-3.5 h-3.5 text-amber-400" />
+            <Wallet className="w-3.5 h-3.5 text-[#a8a8a8]" />
             {walletAddress ? (
               <span>
                 {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}

@@ -5,6 +5,7 @@ declare_id!("7RE9DaArhevher2XmPAVVhvE3V3kT3bWRDEevQGSuyRQ");
 
 pub const ALLOWLIST_SEED: &[u8] = b"allowlist";
 pub const EXTRA_METAS_SEED: &[u8] = b"extra-account-metas";
+pub const KALEND_CORE_PROGRAM_ID: Pubkey = pubkey!("Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527");
 
 #[program]
 pub mod kalend_transfer_hook {
@@ -50,13 +51,38 @@ pub mod kalend_transfer_hook {
     pub fn execute(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         let registry = &ctx.accounts.allowlist_registry;
         let recipient_wallet = ctx.accounts.destination_token.owner;
+        let now = Clock::get()?.unix_timestamp;
 
-        // Invariant Verification: Explicitly validate the institutional accreditation of recipient
-        // Prevents RWA tokens from being transacted to unverified or toxic counterparty wallets
-        require!(
-            registry.is_wallet_approved(recipient_wallet),
-            HookError::AccountNotAccredited
-        );
+        // Invariant Verification: Check institutional accreditation via unified allowlist
+        // 1. Direct accreditation in Compliance Registry PDA
+        let mut is_approved = registry.is_wallet_approved(recipient_wallet);
+
+        // 2. Fallback check: Core protocol AllowEntry PDA passed in remaining accounts
+        if !is_approved {
+            for acc in ctx.remaining_accounts.iter() {
+                // Verify account key matches recipient allow entry PDA seeds [b"allow", recipient]
+                let (expected_pda, _) = Pubkey::find_program_address(
+                    &[b"allow", recipient_wallet.as_ref()],
+                    &crate::KALEND_CORE_PROGRAM_ID,
+                );
+                if acc.key == &expected_pda && acc.data_len() >= 66 {
+                    if let Ok(data) = acc.try_borrow_data() {
+                        // AllowEntry layout: 8 disc + 32 wallet + 8 expiry_ts + 1 roles
+                        if data.len() >= 49 {
+                            let expiry_bytes: [u8; 8] = data[40..48].try_into().unwrap_or([0; 8]);
+                            let expiry_ts = i64::from_le_bytes(expiry_bytes);
+                            let roles = data[48];
+                            if expiry_ts > now && roles != 0 {
+                                is_approved = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        require!(is_approved, HookError::AccountNotAccredited);
 
         msg!("Compliance check passed: {} transferred to accredited wallet {}", amount, recipient_wallet);
         Ok(())
