@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@solana/codecs": ["./node_modules/@solana/codecs"],
+      "@solana/addresses": ["./node_modules/@solana/addresses"],
+      "@chainlink/cre-sdk": ["./node_modules/@chainlink/cre-sdk"]
+    }
+  },
+  "include": ["main.ts"]
+}

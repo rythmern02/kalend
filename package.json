@@ -7,5 +7,8 @@
     "build:program": "cargo-build-sbf --offline --manifest-path programs/kalend/Cargo.toml -- --ignore-rust-version",
     "build:idl": "anchor idl build -o target/idl/kalend.json -t target/types/kalend.ts --skip-lint",
     "build:bindings": "cp target/idl/kalend.json contracts/solana/src/idl/ && HOME=/tmp ./bin/cre generate-bindings solana --language typescript -i contracts/solana/src/idl/ -o contracts/solana/ts/generated/"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }

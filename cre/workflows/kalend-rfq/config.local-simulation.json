@@ -1,0 +1,12 @@
+{
+  "mode": "local-simulation",
+  "authorizedKeys": [],
+  "solanaRpcUrl": "https://api.devnet.solana.com",
+  "programId": "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527",
+  "configPda": "CstkcszP1baZU8UMsFs1g73GKreTgDdZnNKZVpitKvjX",
+  "rentVaultPda": "2P71W4MCiMCUyFzsgHi9UD7DWyj4ypF2uDY5xRDnwDKR",
+  "forwarderState": "5Tipz3yhTBdVsDbaBxZkrp7Gjf3brGq5SKkxReefPMP7",
+  "forwarderProgram": "7kuEAA3mSC1Tz8gQjnvH7bKFda9xSPRRin9SZbH49cNK",
+  "chainSelector": "16423721717087811551",
+  "secretId": "ENCLAVE_PRIVATE_KEY"
+}

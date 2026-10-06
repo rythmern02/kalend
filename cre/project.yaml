@@ -1,0 +1,5 @@
+staging-settings:
+  rpcs: []
+production:
+  rpcs: []
+local-simulation: {}

@@ -1,0 +1,12 @@
+{
+  "mode": "staging",
+  "authorizedKeys": ["0x71C8360f0F44aD593db85faBf45C52E4a1F9f193"],
+  "solanaRpcUrl": "https://api.devnet.solana.com",
+  "programId": "Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527",
+  "configPda": "CstkcszP1baZU8UMsFs1g73GKreTgDdZnNKZVpitKvjX",
+  "rentVaultPda": "2P71W4MCiMCUyFzsgHi9UD7DWyj4ypF2uDY5xRDnwDKR",
+  "forwarderState": "8QoomCQyPSkJ8WopJbX9B4HyvrFzziwvJdU8hZE6DCr9",
+  "forwarderProgram": "CXsKEJcs25TQEYU2e5jZ8QTPE3ffMLZhH6BWHrdcCCB5",
+  "chainSelector": "16423721717087811551",
+  "secretId": "ENCLAVE_PRIVATE_KEY"
+}
