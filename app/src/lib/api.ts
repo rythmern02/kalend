@@ -6,6 +6,10 @@ import {
   SOLANA_RPC_URL,
   RELAY_API_URL,
   DEVNET_STAKE_POOL,
+  PYTH_HERMES_URL,
+  PYTH_API_KEY,
+  PYTH_FEED_SOL_USD,
+  PYTH_FEED_BTC_USD,
 } from './constants'
 import {
   ConfigAccountSchema,
@@ -228,9 +232,49 @@ export async function fetchAllowEntry(walletAddress: string): Promise<AllowEntry
 }
 
 /**
- * Fetch Pyth reference rates (SOL/USD, BTC/USD, US Rates)
+ * Fetch Pyth reference rates (SOL/USD, BTC/USD) via Pyth Hermes API or on-chain Devnet accounts
  */
 export async function fetchPythFeed(symbol: 'SOL/USD' | 'BTC/USD'): Promise<PythFeedData | null> {
+  // 1. Try Authenticated Pyth Hermes API
+  const feedIds: Record<string, string> = {
+    'SOL/USD': PYTH_FEED_SOL_USD,
+    'BTC/USD': PYTH_FEED_BTC_USD,
+  }
+
+  const feedId = feedIds[symbol]
+  if (feedId && PYTH_API_KEY) {
+    try {
+      const res = await fetch(
+        `${PYTH_HERMES_URL}/v2/updates/price/latest?ids[]=${feedId}&parsed=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${PYTH_API_KEY}`,
+          },
+        }
+      )
+      if (res.ok) {
+        const json = await res.json()
+        const parsed = json.parsed?.[0]
+        if (parsed?.price) {
+          const price = Number(parsed.price.price) * Math.pow(10, parsed.price.expo)
+          const confidence = Number(parsed.price.conf) * Math.pow(10, parsed.price.expo)
+          const publishTime = Number(parsed.price.publish_time)
+
+          return PythFeedDataSchema.parse({
+            symbol,
+            price,
+            confidence,
+            publishTime,
+            source: 'Pyth Hermes Live Feed (Authenticated)',
+          })
+        }
+      }
+    } catch {
+      // Fall through to on-chain account fallback
+    }
+  }
+
+  // 2. Fallback: On-Chain Devnet Pyth Price Accounts
   try {
     const feedAddresses: Record<string, string> = {
       'SOL/USD': 'J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix',
@@ -257,7 +301,7 @@ export async function fetchPythFeed(symbol: 'SOL/USD' | 'BTC/USD'): Promise<Pyth
       price,
       confidence,
       publishTime,
-      source: 'Pyth Solana Devnet Feed',
+      source: 'Pyth Solana Devnet On-Chain',
     })
   } catch (err) {
     return null

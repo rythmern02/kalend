@@ -3,6 +3,13 @@
 import React, { useEffect, useState } from 'react'
 import { Activity, ShieldAlert, TrendingUp } from 'lucide-react'
 
+import {
+  PYTH_HERMES_URL,
+  PYTH_API_KEY,
+  PYTH_FEED_SOL_USD,
+  PYTH_FEED_BTC_USD,
+} from '../lib/constants'
+
 interface PriceData {
   id: string
   symbol: string
@@ -12,15 +19,16 @@ interface PriceData {
   source: string
 }
 
-// Real on-chain Pyth Price Accounts on Solana Devnet
-// (Program: gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s)
-const PYTH_ONCHAIN_FEEDS = [
+// Pyth Feeds for SOL/USD and BTC/USD
+const PYTH_FEEDS = [
   {
     symbol: 'SOL/USD',
+    feedId: PYTH_FEED_SOL_USD,
     pubkey: 'J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix',
   },
   {
     symbol: 'BTC/USD',
+    feedId: PYTH_FEED_BTC_USD,
     pubkey: 'HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J',
   },
 ]
@@ -33,12 +41,58 @@ export function PythPriceTicker() {
   useEffect(() => {
     let isMounted = true
 
-    async function fetchPythOnChainPrices() {
+    async function fetchPythPrices() {
       try {
+        // 1. Try Authenticated Pyth Hermes API
+        if (PYTH_API_KEY) {
+          const feedIdsQuery = PYTH_FEEDS.map((f) => `ids[]=${f.feedId}`).join('&')
+          const hermesRes = await fetch(
+            `${PYTH_HERMES_URL}/v2/updates/price/latest?${feedIdsQuery}&parsed=true`,
+            {
+              headers: {
+                Authorization: `Bearer ${PYTH_API_KEY}`,
+              },
+            }
+          ).catch(() => null)
+
+          if (hermesRes && hermesRes.ok) {
+            const data = await hermesRes.json()
+            if (data?.parsed && Array.isArray(data.parsed)) {
+              const results: PriceData[] = []
+              for (const feed of PYTH_FEEDS) {
+                const cleanId = feed.feedId.replace('0x', '')
+                const item = data.parsed.find(
+                  (p: any) => p.id === cleanId || `0x${p.id}` === feed.feedId
+                )
+                if (item?.price) {
+                  const pNum = Number(item.price.price) * Math.pow(10, item.price.expo)
+                  const confNum = Number(item.price.conf) * Math.pow(10, item.price.expo)
+                  results.push({
+                    id: feed.feedId,
+                    symbol: feed.symbol,
+                    price: pNum.toFixed(2),
+                    conf: confNum.toFixed(2),
+                    publishTime: item.price.publish_time,
+                    source: 'Pyth Hermes Network (Live)',
+                  })
+                }
+              }
+
+              if (isMounted && results.length > 0) {
+                setPrices(results)
+                setIsLive(true)
+                setLastUpdated(new Date().toLocaleTimeString())
+                return
+              }
+            }
+          }
+        }
+
+        // 2. Fallback to On-Chain Devnet Pyth Price Accounts
         const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com'
         const results: PriceData[] = []
 
-        for (const feed of PYTH_ONCHAIN_FEEDS) {
+        for (const feed of PYTH_FEEDS) {
           const res = await fetch(rpcUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -54,7 +108,6 @@ export function PythPriceTicker() {
           const data = await res.json()
           if (!data?.result?.value?.data?.[0]) continue
 
-          // Decode Pyth On-Chain Price Account Buffer (Base64)
           const base64Str = data.result.value.data[0]
           const binaryStr = atob(base64Str)
           const bytes = new Uint8Array(binaryStr.length)
@@ -63,12 +116,6 @@ export function PythPriceTicker() {
           }
 
           const view = new DataView(bytes.buffer)
-          // Pyth Account Layout:
-          // offset 0..4: magic (0xa1b2c3d4)
-          // offset 20..24: expo (int32 LE)
-          // offset 208..216: agg.price (int64 LE)
-          // offset 216..224: agg.conf (uint64 LE)
-          // offset 224..232: agg.pub_slot (uint64 LE)
           const magic = view.getUint32(0, true)
           if (magic !== 0xa1b2c3d4) continue
 
@@ -95,12 +142,12 @@ export function PythPriceTicker() {
           setLastUpdated(new Date().toLocaleTimeString())
         }
       } catch (err) {
-        console.error('Failed to read on-chain Pyth accounts:', err)
+        console.error('Failed to read Pyth feeds:', err)
       }
     }
 
-    fetchPythOnChainPrices()
-    const interval = setInterval(fetchPythOnChainPrices, 8000)
+    fetchPythPrices()
+    const interval = setInterval(fetchPythPrices, 8000)
 
     return () => {
       isMounted = false
