@@ -23,12 +23,14 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries, fetchPythFeed, fetchLiveStakePoolRate } from '../../../lib/api'
+import { useWallet } from '../../../lib/wallet'
+import { TiltCard } from '../../../components/TiltCard'
 
 export default function VaultDetailPage() {
   const params = useParams()
   const tier = params?.tier as string
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
   const { data: allSeries, isLoading: isSeriesLoading } = useQuery({
     queryKey: ['series'],
@@ -81,7 +83,7 @@ export default function VaultDetailPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <Header walletAddress={walletAddress} connectWallet={() => {}} />
+      <Header />
       <ModeBar state={modeBarState} />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">

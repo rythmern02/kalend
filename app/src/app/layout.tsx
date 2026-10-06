@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Private request-for-quote exchange for dated yield on Solana, settled confidentially via Chainlink CRE.',
 }
 
+import { CyberGridBackground } from '../components/CyberGridBackground'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
@@ -19,10 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="bg-black text-white min-h-screen flex flex-col antialiased selection:bg-white selection:text-black">
-        <QueryProvider>
-          <WalletProvider>{children}</WalletProvider>
-        </QueryProvider>
+      <body className="bg-black text-white min-h-screen flex flex-col antialiased selection:bg-white selection:text-black relative">
+        <CyberGridBackground />
+        <div className="relative z-10 flex-1 flex flex-col">
+          <QueryProvider>
+            <WalletProvider>{children}</WalletProvider>
+          </QueryProvider>
+        </div>
       </body>
     </html>
   )

@@ -21,6 +21,7 @@ import { fetchAllSeries } from '../../../../lib/api'
 
 import { useWallet } from '../../../../lib/wallet'
 import { redeemPt, claimYt } from '../../../../lib/kalend-client'
+import { TiltCard } from '../../../../components/TiltCard'
 
 export default function MaturityRedeemPage() {
   const params = useParams()
@@ -113,137 +114,143 @@ export default function MaturityRedeemPage() {
         </div>
 
         {/* Settlement Index Card */}
-        <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] mb-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-[#1f1f1f] gap-4">
-            <div>
-              <span className="font-mono text-xs text-[#a8a8a8] uppercase block mb-1">
-                Series Identification
+        <TiltCard accent="default" intensity={3} enableGlare={false} className="mb-10">
+          <div className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-[#1f1f1f] gap-4">
+              <div>
+                <span className="font-mono text-xs text-[#a8a8a8] uppercase block mb-1">
+                  Series Identification
+                </span>
+                <span className="font-mono text-sm text-white">
+                  {series?.pubkey || seriesId}
+                </span>
+              </div>
+              <div>
+                <StatusChip status="Settled" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-mono text-xs mb-6">
+              <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Initial Opening Index</span>
+                <span className="text-xl text-white font-medium block">1.000000 WAD</span>
+                <span className="text-[11px] text-[#737373]">At series opening</span>
+              </div>
+
+              <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Attested Settlement Index</span>
+                <span className="text-xl text-[#4ade80] font-medium block">1.071200 WAD</span>
+                <span className="text-[11px] text-[#4ade80]">+7.12% Realized Yield</span>
+              </div>
+
+              <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                <span className="text-[#737373] block mb-1">Corporate Split Ratio</span>
+                <span className="text-xl text-white font-medium block">1.0 : 1.0</span>
+                <span className="text-[11px] text-[#737373]">No dilution adjustment</span>
+              </div>
+            </div>
+
+            {/* Plain sentence settlement math */}
+            <div className="p-4 bg-[#0d0d0d] border border-[#262626] rounded-[2px] text-xs font-mono">
+              <span className="text-[#a8a8a8] uppercase text-[10px] block mb-1">
+                Settlement Payout Formula
               </span>
-              <span className="font-mono text-sm text-white">
-                {series?.pubkey || seriesId}
-              </span>
-            </div>
-            <div>
-              <StatusChip status="Settled" />
+              <p className="text-white leading-relaxed">
+                For every 1.000000 PT held, you receive exactly {ptRedeemUnit} underlying collateral tokens, while every 1.000000 YT claims the remaining {ytClaimUnit} yield tokens, conserving 100% of deposited vault collateral.
+              </p>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-mono text-xs mb-6">
-            <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">Initial Opening Index</span>
-              <span className="text-xl text-white font-medium block">1.000000 WAD</span>
-              <span className="text-[11px] text-[#737373]">At series opening</span>
-            </div>
-
-            <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">Attested Settlement Index</span>
-              <span className="text-xl text-[#4ade80] font-medium block">1.071200 WAD</span>
-              <span className="text-[11px] text-[#4ade80]">+7.12% Realized Yield</span>
-            </div>
-
-            <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-              <span className="text-[#737373] block mb-1">Corporate Split Ratio</span>
-              <span className="text-xl text-white font-medium block">1.0 : 1.0</span>
-              <span className="text-[11px] text-[#737373]">No dilution adjustment</span>
-            </div>
-          </div>
-
-          {/* Plain sentence settlement math */}
-          <div className="p-4 bg-[#0d0d0d] border border-[#262626] rounded-[2px] text-xs font-mono">
-            <span className="text-[#a8a8a8] uppercase text-[10px] block mb-1">
-              Settlement Payout Formula
-            </span>
-            <p className="text-white leading-relaxed">
-              For every 1.000000 PT held, you receive exactly {ptRedeemUnit} underlying collateral tokens, while every 1.000000 YT claims the remaining {ytClaimUnit} yield tokens, conserving 100% of deposited vault collateral.
-            </p>
-          </div>
-        </div>
+        </TiltCard>
 
         {/* Action Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
           {/* Redeem PT */}
-          <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-mono text-xs text-[#4ade80] uppercase">
-                  Principal Token Payout
-                </span>
-              </div>
-              <h3 className="font-serif text-xl text-white font-medium mb-2">
-                Redeem PT for Collateral
-              </h3>
-              <p className="text-xs text-[#a8a8a8] mb-6 leading-relaxed">
-                Burn Principal Tokens to claim your guaranteed underlying collateral allocation.
-              </p>
-
-              <div className="space-y-4 mb-6 font-mono text-xs">
-                <div>
-                  <span className="text-[#a8a8a8] block mb-1">Redeem Amount:</span>
-                  <input
-                    type="number"
-                    value={redeemPtAmount}
-                    onChange={(e) => setRedeemPtAmount(e.target.value)}
-                    className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-2.5 px-3 text-white font-mono text-base focus:outline-none"
-                  />
-                </div>
-                <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-                  <span className="text-[#737373] block mb-0.5">Estimated Collateral Received:</span>
-                  <span className="text-white font-medium text-sm">
-                    {(Number(redeemPtAmount || '0') * Number(ptRedeemUnit)).toFixed(2)} Collateral
+          <TiltCard accent="emerald" intensity={4} enableGlare={true}>
+            <div className="p-7 flex flex-col justify-between h-full">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-mono text-xs text-[#4ade80] uppercase font-semibold">
+                    Principal Token Payout
                   </span>
                 </div>
-              </div>
-            </div>
+                <h3 className="font-serif text-2xl text-white font-medium mb-2">
+                  Redeem PT for Collateral
+                </h3>
+                <p className="text-xs text-[#a8a8a8] mb-6 leading-relaxed">
+                  Burn Principal Tokens to claim your guaranteed underlying collateral allocation.
+                </p>
 
-            <button
-              onClick={() => setActiveModal('pt')}
-              className="w-full py-3 bg-white text-black font-medium text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-colors"
-            >
-              Redeem {redeemPtAmount} PT
-            </button>
-          </div>
+                <div className="space-y-4 mb-6 font-mono text-xs">
+                  <div>
+                    <span className="text-[#a8a8a8] block mb-1">Redeem Amount:</span>
+                    <input
+                      type="number"
+                      value={redeemPtAmount}
+                      onChange={(e) => setRedeemPtAmount(e.target.value)}
+                      className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3 px-3.5 text-white font-mono text-base focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                    <span className="text-[#737373] block mb-0.5">Estimated Collateral Received:</span>
+                    <span className="text-white font-medium text-sm">
+                      {(Number(redeemPtAmount || '0') * Number(ptRedeemUnit)).toFixed(2)} Collateral
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setActiveModal('pt')}
+                className="w-full py-3.5 bg-white text-black font-semibold text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]"
+              >
+                Redeem {redeemPtAmount} PT
+              </button>
+            </div>
+          </TiltCard>
 
           {/* Claim YT */}
-          <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-mono text-xs text-[#fbbf24] uppercase">
-                  Yield Token Payout
-                </span>
-              </div>
-              <h3 className="font-serif text-xl text-white font-medium mb-2">
-                Claim YT Realized Yield
-              </h3>
-              <p className="text-xs text-[#a8a8a8] mb-6 leading-relaxed">
-                Burn Yield Tokens to claim all accumulated yield and corporate dividends in-kind.
-              </p>
-
-              <div className="space-y-4 mb-6 font-mono text-xs">
-                <div>
-                  <span className="text-[#a8a8a8] block mb-1">Claim Amount:</span>
-                  <input
-                    type="number"
-                    value={claimYtAmount}
-                    onChange={(e) => setClaimYtAmount(e.target.value)}
-                    className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-2.5 px-3 text-white font-mono text-base focus:outline-none"
-                  />
-                </div>
-                <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-                  <span className="text-[#737373] block mb-0.5">Estimated Yield Claimed:</span>
-                  <span className="text-[#4ade80] font-medium text-sm">
-                    {(Number(claimYtAmount || '0') * Number(ytClaimUnit)).toFixed(2)} Yield Tokens
+          <TiltCard accent="amber" intensity={4} enableGlare={true}>
+            <div className="p-7 flex flex-col justify-between h-full">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-mono text-xs text-[#fbbf24] uppercase font-semibold">
+                    Yield Token Payout
                   </span>
                 </div>
-              </div>
-            </div>
+                <h3 className="font-serif text-2xl text-white font-medium mb-2">
+                  Claim YT Realized Yield
+                </h3>
+                <p className="text-xs text-[#a8a8a8] mb-6 leading-relaxed">
+                  Burn Yield Tokens to claim all accumulated yield and corporate dividends in-kind.
+                </p>
 
-            <button
-              onClick={() => setActiveModal('yt')}
-              className="w-full py-3 bg-white text-black font-medium text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-colors"
-            >
-              Claim Yield on {claimYtAmount} YT
-            </button>
-          </div>
+                <div className="space-y-4 mb-6 font-mono text-xs">
+                  <div>
+                    <span className="text-[#a8a8a8] block mb-1">Claim Amount:</span>
+                    <input
+                      type="number"
+                      value={claimYtAmount}
+                      onChange={(e) => setClaimYtAmount(e.target.value)}
+                      className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3 px-3.5 text-white font-mono text-base focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
+                    <span className="text-[#737373] block mb-0.5">Estimated Yield Claimed:</span>
+                    <span className="text-[#4ade80] font-medium text-sm">
+                      {(Number(claimYtAmount || '0') * Number(ytClaimUnit)).toFixed(2)} Yield Tokens
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setActiveModal('yt')}
+                className="w-full py-3.5 bg-white text-black font-semibold text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]"
+              >
+                Claim Yield on {claimYtAmount} YT
+              </button>
+            </div>
+          </TiltCard>
         </div>
 
         <ConfirmActionModal

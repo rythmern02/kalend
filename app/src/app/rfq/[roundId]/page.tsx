@@ -7,6 +7,7 @@ import { Header } from '../../../components/Header'
 import { ModeBar, useModeBarState } from '../../../components/ModeBar'
 import { StatusChip } from '../../../components/StatusChip'
 import { DataSourceTag } from '../../../components/DataSourceTag'
+import { TiltCard } from '../../../components/TiltCard'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -17,51 +18,67 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
+  AlertCircle,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchRfqRound } from '../../../lib/api'
+import { useWallet } from '../../../lib/wallet'
 
 export default function RoundStatusPage() {
   const params = useParams()
   const roundId = params?.roundId as string
   const modeBarState = useModeBarState()
-  const [walletAddress] = useState<string>('Pga9oB2E7XqJwaZijcczrL24b7YgXGfR3sXC2ySoLnX')
+  const wallet = useWallet()
 
-  const [simulatedStage, setSimulatedStage] = useState<number>(3)
-  const [countdown, setCountdown] = useState<number>(18)
-
-  const { data: roundData } = useQuery({
+  const { data: roundData, isLoading } = useQuery({
     queryKey: ['rfqRound', roundId],
     queryFn: () => fetchRfqRound(roundId),
     refetchInterval: 3000,
   })
 
+  // Derive real stage from roundData.status
+  // 'open' -> stage 1 (window open)
+  // 'matching' -> stage 2 (matching in enclave)
+  // 'settled' -> stage 4 (executed)
+  // 'expired' / 'failed' -> error
+  const stageMap: Record<string, number> = {
+    open: 1,
+    matching: 2,
+    settled: 4,
+    expired: 0,
+    failed: 0,
+  }
+
+  const currentStage = roundData ? (stageMap[roundData.status] ?? 1) : 1
+  const notAfter = roundData?.not_after ? roundData.not_after * 1000 : Date.now() + 180000
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(
+    Math.max(0, Math.floor((notAfter - Date.now()) / 1000))
+  )
+
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+      setSecondsRemaining(Math.max(0, Math.floor((notAfter - Date.now()) / 1000)))
     }, 1000)
     return () => clearInterval(timer)
-  }, [])
-
-  // Auto transition for presentation
-  useEffect(() => {
-    const stageTimer = setTimeout(() => {
-      setSimulatedStage(4) // Executed
-    }, 4000)
-    return () => clearInterval(stageTimer)
-  }, [])
+  }, [notAfter])
 
   const steps = [
     { label: 'Sealed', desc: 'HPKE ciphertext submitted', icon: Lock },
-    { label: 'Window Open', desc: 'Authorized dealers quoting', icon: Clock },
-    { label: 'Matching in Enclave', desc: 'Knapsack waterfall in TEE', icon: Cpu },
-    { label: 'Fill on Solana', desc: 'Keystone forwarder CPI', icon: Layers },
+    { label: 'Window Open', desc: `${roundData?.quote_count ?? 0} quotes received`, icon: Clock },
+    { label: 'Enclave Matching', desc: 'Knapsack waterfall in TEE', icon: Cpu },
+    { label: 'Solana CPI', desc: 'Keystone forwarder write', icon: Layers },
     { label: 'Executed', desc: 'Atomic escrow swap finalized', icon: CheckCircle2 },
   ]
 
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0')
+    const s = (secs % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
+  }
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
-      <Header walletAddress={walletAddress} connectWallet={() => {}} />
+      <Header />
       <ModeBar state={modeBarState} />
 
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -78,9 +95,9 @@ export default function RoundStatusPage() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="font-mono text-xs text-[#a8a8a8] uppercase tracking-wider">
-                RFQ Round Status
+                RFQ Round Lifecycle
               </span>
-              <StatusChip status={simulatedStage >= 4 ? 'Executed' : 'Matching'} />
+              <StatusChip status={roundData ? roundData.status.toUpperCase() : 'PENDING'} />
             </div>
             <h1 className="font-serif text-3xl font-medium text-white mb-1">
               Round Execution Audit
@@ -92,105 +109,132 @@ export default function RoundStatusPage() {
 
           <div className="p-4 bg-[#0a0a0a] border border-[#222222] rounded-[2px] font-mono text-xs text-right shrink-0">
             <span className="text-[#737373] block mb-1 uppercase text-[10px]">
-              Auction Window Timer
+              Auction Window Remaining
             </span>
-            <span className="text-xl font-medium text-white">00:{countdown.toString().padStart(2, '0')}</span>
+            <span className="text-xl font-medium text-white font-mono">{formatTimer(secondsRemaining)}</span>
           </div>
         </div>
 
         {/* Timeline Stepper */}
-        <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] mb-10">
-          <span className="font-mono text-xs text-[#737373] uppercase tracking-wider block mb-6">
-            Execution Lifecycle
-          </span>
+        <TiltCard accent="default" intensity={3} enableGlare={false} className="mb-10">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <span className="font-mono text-xs text-[#737373] uppercase tracking-wider block">
+                Execution Lifecycle
+              </span>
+              <DataSourceTag sourceName="Relay Real-Time Telemetry" />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-            {steps.map((st, idx) => {
-              const Icon = st.icon
-              const isPast = idx < simulatedStage
-              const isCurrent = idx === simulatedStage
-              return (
-                <div
-                  key={st.label}
-                  className={`p-4 rounded-[2px] border transition-colors ${
-                    isCurrent
-                      ? 'bg-[#141414] border-white text-white'
-                      : isPast
-                      ? 'bg-[#0c1f13] border-[#1b4329] text-[#4ade80]'
-                      : 'bg-[#0a0a0a] border-[#1c1c1c] text-[#555]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon className="w-4 h-4" />
-                    <span className="font-mono text-[10px] uppercase">
-                      {isPast ? 'Done' : isCurrent ? 'Active' : 'Pending'}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              {steps.map((st, idx) => {
+                const Icon = st.icon
+                const isPast = idx < currentStage
+                const isCurrent = idx === currentStage
+                return (
+                  <div
+                    key={st.label}
+                    className={`p-4 rounded-[3px] border transition-all ${
+                      isCurrent
+                        ? 'bg-[#151515] border-white text-white shadow-[0_0_15px_-3px_rgba(255,255,255,0.2)]'
+                        : isPast
+                        ? 'bg-[#0c1f13] border-[#1b4329] text-[#4ade80]'
+                        : 'bg-[#0a0a0a] border-[#1c1c1c] text-[#555]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <Icon className="w-4 h-4" />
+                      <span className="font-mono text-[10px] uppercase font-semibold">
+                        {isPast ? 'Done' : isCurrent ? 'Active' : 'Pending'}
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs font-medium block mb-1">
+                      {st.label}
+                    </span>
+                    <span className="text-[11px] text-[#a8a8a8] block leading-tight">
+                      {st.desc}
                     </span>
                   </div>
-                  <span className="font-mono text-xs font-medium block mb-1">
-                    {st.label}
-                  </span>
-                  <span className="text-[11px] text-[#a8a8a8] block leading-tight">
-                    {st.desc}
-                  </span>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
+        </TiltCard>
 
         {/* Execution Results Summary */}
-        <div className="p-6 rounded-[4px] bg-[#0a0a0a] border border-[#222222] mb-10">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#1c1c1c]">
-            <h2 className="font-serif text-lg text-white font-medium flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#4ade80]" />
-              Enclave Match Results (Blended Fill)
-            </h2>
-            <div className="text-[11px] font-mono text-[#a8a8a8] bg-[#141414] px-2 py-0.5 rounded-[2px] border border-[#262626]">
-              Number of Dealer Fills Hidden
+        <TiltCard accent={roundData?.status === 'settled' ? 'emerald' : 'default'} intensity={4} enableGlare={true} className="mb-10">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#1c1c1c]">
+              <h2 className="font-serif text-lg text-white font-medium flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#4ade80]" />
+                Enclave Match Results (Blended Fill)
+              </h2>
+              <div className="text-[11px] font-mono text-[#a8a8a8] bg-[#141414] px-2.5 py-0.5 rounded-[2px] border border-[#262626]">
+                Dealer Quote Privacy Preserved
+              </div>
             </div>
+
+            {roundData?.status === 'settled' ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-mono text-xs mb-6">
+                  <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
+                    <span className="text-[#737373] block mb-1 uppercase">Blended Rate Achieved</span>
+                    <span className="text-xl text-[#4ade80] font-medium block mb-1">
+                      {roundData.blended_rate ? `${roundData.blended_rate.toFixed(2)}% APY` : 'Executed'}
+                    </span>
+                    <span className="text-[11px] text-[#a8a8a8]">
+                      Knapsack waterfall optimal match
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
+                    <span className="text-[#737373] block mb-1 uppercase">Status</span>
+                    <span className="text-xl text-white font-medium block mb-1">Settled</span>
+                    <span className="text-[11px] text-[#4ade80]">Atomic escrow swap finalized</span>
+                  </div>
+
+                  <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
+                    <span className="text-[#737373] block mb-1 uppercase">Fill Receipt PDA</span>
+                    <span className="text-xl text-white font-medium block mb-1 truncate">
+                      {roundData.fill_receipt ? `${roundData.fill_receipt.slice(0, 8)}...` : 'On-Chain'}
+                    </span>
+                    <span className="text-[11px] text-[#a8a8a8]">Swapped atomically via Keystone</span>
+                  </div>
+                </div>
+
+                {roundData.fill_receipt && (
+                  <div className="p-4 bg-[#121212] border border-[#242424] rounded-[2px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+                    <div>
+                      <span className="text-[#737373] block mb-0.5">FillReceipt On-Chain PDA</span>
+                      <span className="text-white text-[11px]">{roundData.fill_receipt}</span>
+                    </div>
+
+                    <a
+                      href={`https://explorer.solana.com/address/${roundData.fill_receipt}?cluster=devnet`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-4 py-2 rounded-[2px] bg-white text-black font-semibold text-xs hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_15px_rgba(255,255,255,0.25)] shrink-0"
+                    >
+                      <span>View On-Chain Receipt</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-8 text-center font-mono text-xs">
+                <div className="w-10 h-10 rounded-[2px] bg-[#141414] border border-[#262626] flex items-center justify-center text-[#fbbf24] mx-auto mb-3">
+                  <Clock className="w-5 h-5 animate-pulse" />
+                </div>
+                <h3 className="text-sm font-medium text-white mb-1">
+                  Awaiting Enclave Matching & Settlement
+                </h3>
+                <p className="text-[#737373] text-[11px] max-w-md mx-auto leading-relaxed">
+                  Auction round is open ({roundData?.quote_count ?? 0} quotes received). When the 300s window closes or the round is triggered, quotes will be evaluated confidentially inside Chainlink CRE TEE.
+                </p>
+              </div>
+            )}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-mono text-xs mb-6">
-            <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
-              <span className="text-[#737373] block mb-1 uppercase">Blended Rate Achieved</span>
-              <span className="text-xl text-[#4ade80] font-medium block mb-1">4.92% APY</span>
-              <span className="text-[11px] text-[#a8a8a8]">
-                Better than limit: +0.03% improved
-              </span>
-            </div>
-
-            <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
-              <span className="text-[#737373] block mb-1 uppercase">Total Filled Size</span>
-              <span className="text-xl text-white font-medium block mb-1">1,000,000 PT</span>
-              <span className="text-[11px] text-[#a8a8a8]">100% Volume satisfied</span>
-            </div>
-
-            <div className="p-4 bg-[#121212] border border-[#1e1e1e] rounded-[2px]">
-              <span className="text-[#737373] block mb-1 uppercase">Gross Quote Proceeds</span>
-              <span className="text-xl text-white font-medium block mb-1">\$965,000 USDC</span>
-              <span className="text-[11px] text-[#a8a8a8]">Swapped atomically via ALT</span>
-            </div>
-          </div>
-
-          <div className="p-4 bg-[#121212] border border-[#242424] rounded-[2px] flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
-            <div>
-              <span className="text-[#737373] block mb-0.5">FillReceipt On-Chain PDA</span>
-              <span className="text-white text-[11px]">
-                227GaCtKiP4mFch4AtZBLAviLcJBgJYeCpxXPWAQfNS1
-              </span>
-            </div>
-
-            <a
-              href="https://explorer.solana.com/address/227GaCtKiP4mFch4AtZBLAviLcJBgJYeCpxXPWAQfNS1?cluster=devnet"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] bg-white text-black font-medium text-[11px] hover:bg-[#e6e6e6] transition-colors shrink-0"
-            >
-              <span>View On-Chain Receipt</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
+        </TiltCard>
       </main>
     </div>
   )

@@ -16,6 +16,7 @@ import { VisibilityItem } from '../../../../lib/types'
 
 import { useWallet } from '../../../../lib/wallet'
 import { stripTokens, mergeTokens } from '../../../../lib/kalend-client'
+import { TiltCard } from '../../../../components/TiltCard'
 
 export default function StripMergePage() {
   const params = useParams()
@@ -130,92 +131,94 @@ export default function StripMergePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Main Action Ticket */}
           <div className="lg:col-span-7">
-            <div className="rounded-[4px] bg-[#0a0a0a] border border-[#222222] p-6">
-              {/* Tab Selector */}
-              <div className="flex border-b border-[#222222] mb-6">
-                <button
-                  onClick={() => setActiveTab('strip')}
-                  className={`flex-1 py-3 text-xs font-mono font-medium border-b-2 transition-colors ${
-                    activeTab === 'strip'
-                      ? 'border-white text-white'
-                      : 'border-transparent text-[#a8a8a8] hover:text-white'
-                  }`}
-                >
-                  Strip (Deposit → PT + YT)
-                </button>
-                <button
-                  onClick={() => setActiveTab('merge')}
-                  className={`flex-1 py-3 text-xs font-mono font-medium border-b-2 transition-colors ${
-                    activeTab === 'merge'
-                      ? 'border-white text-white'
-                      : 'border-transparent text-[#a8a8a8] hover:text-white'
-                  }`}
-                >
-                  Merge (PT + YT → Withdraw)
-                </button>
-              </div>
+            <TiltCard accent="emerald" intensity={4} enableGlare={true}>
+              <div className="p-7">
+                {/* Tab Selector */}
+                <div className="flex border-b border-[#222222] mb-6">
+                  <button
+                    onClick={() => setActiveTab('strip')}
+                    className={`flex-1 py-3 text-xs font-mono font-medium border-b-2 transition-colors ${
+                      activeTab === 'strip'
+                        ? 'border-white text-white'
+                        : 'border-transparent text-[#a8a8a8] hover:text-white'
+                    }`}
+                  >
+                    Strip (Deposit → PT + YT)
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('merge')}
+                    className={`flex-1 py-3 text-xs font-mono font-medium border-b-2 transition-colors ${
+                      activeTab === 'merge'
+                        ? 'border-white text-white'
+                        : 'border-transparent text-[#a8a8a8] hover:text-white'
+                    }`}
+                  >
+                    Merge (PT + YT → Withdraw)
+                  </button>
+                </div>
 
-              {/* Amount Input */}
-              <div className="space-y-4 mb-6">
-                <div>
-                  <div className="flex justify-between text-xs font-mono mb-2">
-                    <span className="text-[#a8a8a8]">
-                      {activeTab === 'strip' ? 'Deposit Collateral Amount' : 'Merge PT/YT Amount'}
-                    </span>
-                    <button
-                      onClick={() => setAmount('1000000')}
-                      className="text-[#4ade80] hover:underline"
-                    >
-                      Max: 1,000,000
-                    </button>
+                {/* Amount Input */}
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <div className="flex justify-between text-xs font-mono mb-2">
+                      <span className="text-[#a8a8a8]">
+                        {activeTab === 'strip' ? 'Deposit Collateral Amount' : 'Merge PT/YT Amount'}
+                      </span>
+                      <button
+                        onClick={() => setAmount('1000000')}
+                        className="text-[#4ade80] hover:underline"
+                      >
+                        Max: 1,000,000
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3.5 px-4 text-white font-mono text-lg focus:outline-none transition-colors"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-xs text-[#a8a8a8]">
+                        {series ? 'RAW' : 'TOKENS'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3 px-4 text-white font-mono text-lg focus:outline-none transition-colors"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-xs text-[#a8a8a8]">
-                      {series ? 'RAW' : 'TOKENS'}
+
+                  {/* Preview Box */}
+                  <div className="p-4 bg-[#121212] border border-[#222222] rounded-[2px] font-mono text-xs space-y-2">
+                    <span className="text-[#737373] uppercase tracking-wider block text-[10px] mb-2">
+                      Output Preview (1:1 Conservation)
                     </span>
+                    <div className="flex justify-between">
+                      <span className="text-[#a8a8a8]">Principal Tokens (PT):</span>
+                      <span className="text-white font-medium">+{amount || '0'} PT</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#a8a8a8]">Yield Tokens (YT):</span>
+                      <span className="text-white font-medium">+{amount || '0'} YT</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-[#1e1e1e]">
+                      <span className="text-[#a8a8a8]">Maturity Timestamp:</span>
+                      <span className="text-[#fbbf24]">
+                        {series
+                          ? new Date(series.maturity_ts * 1000).toLocaleDateString()
+                          : '—'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Preview Box */}
-                <div className="p-4 bg-[#121212] border border-[#222222] rounded-[2px] font-mono text-xs space-y-2">
-                  <span className="text-[#737373] uppercase tracking-wider block text-[10px] mb-2">
-                    Output Preview (1:1 Conservation)
-                  </span>
-                  <div className="flex justify-between">
-                    <span className="text-[#a8a8a8]">Principal Tokens (PT):</span>
-                    <span className="text-white font-medium">+{amount || '0'} PT</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#a8a8a8]">Yield Tokens (YT):</span>
-                    <span className="text-white font-medium">+{amount || '0'} YT</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-[#1e1e1e]">
-                    <span className="text-[#a8a8a8]">Maturity Timestamp:</span>
-                    <span className="text-[#fbbf24]">
-                      {series
-                        ? new Date(series.maturity_ts * 1000).toLocaleDateString()
-                        : '—'}
-                    </span>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setIsConfirmOpen(true)}
+                  className="w-full py-3.5 bg-white text-black font-semibold text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.25)]"
+                >
+                  {activeTab === 'strip'
+                    ? `Strip ${amount || '0'} Collateral`
+                    : `Merge ${amount || '0'} PT & YT`}
+                </button>
               </div>
-
-              <button
-                onClick={() => setIsConfirmOpen(true)}
-                className="w-full py-3 bg-white text-black font-medium text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-colors"
-              >
-                {activeTab === 'strip'
-                  ? `Strip ${amount || '0'} Collateral`
-                  : `Merge ${amount || '0'} PT & YT`}
-              </button>
-            </div>
+            </TiltCard>
           </div>
 
           {/* Visibility Panel Column */}

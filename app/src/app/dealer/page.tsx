@@ -22,6 +22,7 @@ import { fetchAllSeries } from '../../lib/api'
 import { useWallet } from '../../lib/wallet'
 import { sealOrderEnvelopeWithSigner } from '../../lib/crypto'
 import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../../lib/constants'
+import { TiltCard } from '../../components/TiltCard'
 
 export default function DealerDeskPage() {
   const modeBarState = useModeBarState()
@@ -223,71 +224,78 @@ export default function DealerDeskPage() {
 
           {/* Quote Ticket Column */}
           <div className="lg:col-span-7">
-            <div className="rounded-[4px] bg-[#0a0a0a] border border-[#222222] p-6">
-              <h2 className="font-serif text-xl text-white font-medium mb-6">
-                Submit Sealed Quote
-              </h2>
+            <TiltCard accent="emerald" intensity={5} enableGlare={true}>
+              <div className="p-7">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="font-serif text-2xl text-white font-medium">
+                    Submit Sealed Quote
+                  </h2>
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded-[2px] bg-[#0c1f13] border border-[#1b4329] text-[#4ade80]">
+                    Chainlink CRE TEE Protected
+                  </span>
+                </div>
 
-              <div className="space-y-6 mb-8 font-mono text-xs">
-                <div>
-                  <label className="text-[#a8a8a8] uppercase block mb-2">
-                    Quote Price (Discounted Clean Price)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={quotePrice}
-                      onChange={(e) => setQuotePrice(e.target.value)}
-                      className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3 px-4 text-white text-base focus:outline-none"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#737373]">
-                      USDC / PT
-                    </span>
+                <div className="space-y-6 mb-8 font-mono text-xs">
+                  <div>
+                    <label className="text-[#a8a8a8] uppercase block mb-2">
+                      Quote Price (Discounted Clean Price)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.0001"
+                        value={quotePrice}
+                        onChange={(e) => setQuotePrice(e.target.value)}
+                        className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3.5 px-4 text-white text-base focus:outline-none transition-colors"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#737373]">
+                        USDC / PT
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[#a8a8a8] uppercase block mb-2">
+                      Maximum Fill Size Capacity
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={quoteMaxSize}
+                        onChange={(e) => setQuoteMaxSize(e.target.value)}
+                        className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3.5 px-4 text-white text-base focus:outline-none transition-colors"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#737373]">
+                        PT
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-[#121212] border border-[#222222] rounded-[2px] space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-[#737373]">Maximum Capital Commitment:</span>
+                      <span className="text-white font-medium">
+                        ${(Number(quoteMaxSize || '0') * Number(quotePrice || '0')).toLocaleString()} USDC
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#737373]">Implied Annualized Yield:</span>
+                      <span className="text-[#4ade80] font-medium">
+                        {((1 / Number(quotePrice || '1') - 1) * (365 / 90) * 100).toFixed(2)}% APY
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[#a8a8a8] uppercase block mb-2">
-                    Maximum Fill Size Capacity
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={quoteMaxSize}
-                      onChange={(e) => setQuoteMaxSize(e.target.value)}
-                      className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3 px-4 text-white text-base focus:outline-none"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#737373]">
-                      PT
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-[#121212] border border-[#222222] rounded-[2px] space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-[#737373]">Maximum Capital Commitment:</span>
-                    <span className="text-white font-medium">
-                      ${(Number(quoteMaxSize || '0') * Number(quotePrice || '0')).toLocaleString()} USDC
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#737373]">Implied Annualized Yield:</span>
-                    <span className="text-[#4ade80]">
-                      {((1 / Number(quotePrice || '1') - 1) * (365 / 90) * 100).toFixed(2)}% APY
-                    </span>
-                  </div>
-                </div>
+                <button
+                  onClick={() => setIsConfirmOpen(true)}
+                  className="w-full py-3.5 bg-white text-black font-semibold text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.25)] flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Seal and Submit Quote ({quotePrice} USDC)</span>
+                </button>
               </div>
-
-              <button
-                onClick={() => setIsConfirmOpen(true)}
-                className="w-full py-3 bg-white text-black font-medium text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-colors flex items-center justify-center gap-2"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Seal and Submit Quote ({quotePrice} USDC)</span>
-              </button>
-            </div>
+            </TiltCard>
           </div>
         </div>
 
