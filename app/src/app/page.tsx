@@ -7,6 +7,7 @@ import { StripMergeTab } from '@/components/StripMergeTab'
 import { RfqExchangeTab } from '@/components/RfqExchangeTab'
 import { MaturityTab } from '@/components/MaturityTab'
 import { TransparencyTab } from '@/components/TransparencyTab'
+import { PythPriceTicker } from '@/components/PythPriceTicker'
 import { Lock, Shield, Cpu, ExternalLink } from 'lucide-react'
 
 export default function Home() {
@@ -43,6 +44,11 @@ export default function Home() {
             Strip and merge on Solana base layer. Match quotes privately inside a Chainlink CRE confidential enclave.
             Only the cryptographic fill and the final attested maturity touch the public chain.
           </p>
+        </div>
+
+        {/* Pyth Reference Price Ticker (Tier 1) */}
+        <div className="max-w-2xl mx-auto mb-8">
+          <PythPriceTicker />
         </div>
 
         {/* Tab Content */}

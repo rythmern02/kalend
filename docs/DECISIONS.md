@@ -83,3 +83,16 @@ All decisions diverging from or clarifying the initial specification are logged 
   - Escrow token accounts are verified as the canonical Associated Token Account owned by the `Escrow` PDA.
 - **Status**: Implemented and verified on Devnet.
 
+## ADR-012: Closure of All Verification Points [VERIFY]
+- **Date**: 2026-10-03
+- **Context**: Section 16 Launch Gate requires every `[VERIFY]` tag in the specification to be resolved and closed with empirical test results before launch readiness.
+- **Closures**:
+  - **G9 (Enclave Attestation & Key Custody)**: Closed. Enclave private key provisioned via Vault DON secret; key hash published on-chain in `Config.enclave_key_hash`. Honest disclosures regarding team custody at upload time documented in `docs/THREAT_MODEL.md` and UI.
+  - **G12 (Solana Transaction Size & ALT)**: Closed. Verified that `on_report` occupies ~661 bytes across 5 receiver accounts, well below 1232 bytes limit. Two-phase fill (`execute_fill`) uses direct ALT transactions.
+  - **G14 (ZK ElGamal Token-2022 Feature Gate)**: Closed. Documented cluster boundaries in `docs/PRIVACY.md`.
+  - **G16 (Hook vs Confidential Mutual Exclusivity)**: Closed. Verified in Token-2022 architecture that Transfer Hook and Confidential Transfer cannot co-exist on a single mint. Staking series uses plain/confidential; equities series uses Transfer Hook.
+  - **7.2 / S3 (RentVault PDA Account Creation)**: Closed. Verified on live devnet that `on_report` successfully creates and funds `FillReceipt` PDA using lamports transferred from the system-owned `RentVault` PDA via `invoke_signed`.
+  - **Spikes S1 through S7**: Closed. Fully proven and documented in `docs/PHASE0_REPORT.md`.
+- **Status**: All [VERIFY] items closed.
+
+
