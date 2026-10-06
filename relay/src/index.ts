@@ -107,9 +107,9 @@ app.post('/rfq/rounds', async (c) => {
     return c.json({ error: 'Missing series pubkey' }, 400)
   }
 
-  const roundId = crypto.randomBytes(32).toString('hex')
+  const roundId = body.round_id || crypto.randomBytes(32).toString('hex')
   const kid = body.kid || 'kid-2026-v1'
-  const duration = typeof body.duration === 'number' ? body.duration : 30
+  const duration = typeof body.duration === 'number' ? body.duration : 300
 
   const round = store.createRound(roundId, series, kid, duration)
   console.log(`[Relay] Opened new RFQ round ${roundId} for series ${series} (window: ${duration}s)`)
@@ -158,6 +158,34 @@ app.post('/rfq/request', async (c) => {
 
   if (!round_id || !enc || !ciphertext || !kid) {
     return c.json({ error: 'Missing required sealed envelope fields: round_id, enc, ciphertext, kid' }, 400)
+  }
+
+  // Auto-create round if not yet initialized in store
+  let round = store.getRound(round_id)
+  if (!round) {
+    const series = body.series || 'CSQJmtGu6s6KJ9wcfv8zY5LBioCnfcRenmFFB1pFPUwY'
+    const duration = typeof body.duration === 'number' ? body.duration : 300
+    round = store.createRound(round_id, series, kid, duration)
+    console.log(`[Relay] Opened new RFQ round ${round_id} on request submission (series: ${series}, window: ${duration}s)`)
+
+    setTimeout(async () => {
+      const currentRound = store.getRound(round_id)
+      if (currentRound && currentRound.status === 'open') {
+        console.log(`[Relay] Round window expired for ${round_id}, sealing and triggering matching...`)
+        store.updateRoundStatus(round_id, 'sealed')
+        const result = await creClient.triggerRfqWorkflow({
+          kid: currentRound.kid,
+          round_id: currentRound.round_id,
+          series: currentRound.series,
+          requests: currentRound.requests,
+          quotes: currentRound.quotes,
+        })
+        store.updateRoundStatus(round_id, result.success ? 'submitted' : 'open', {
+          error: result.error,
+        })
+        solanaWatcher.startWatchingRound(round_id)
+      }
+    }, duration * 1000)
   }
 
   const success = store.addRequest(round_id, { enc, ciphertext, kid })

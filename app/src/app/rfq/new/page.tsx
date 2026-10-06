@@ -150,6 +150,8 @@ export default function NewRfqPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           round_id: newRoundId,
+          series: payload.series,
+          duration: windowLengthSec,
           enc: sealed.enc,
           ciphertext: sealed.ciphertext,
           kid: CURRENT_KID,
