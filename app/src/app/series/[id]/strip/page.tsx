@@ -15,7 +15,9 @@ import { fetchAllSeries } from '../../../../lib/api'
 import { VisibilityItem } from '../../../../lib/types'
 
 import { useWallet } from '../../../../lib/wallet'
-import { getMintDecimals, parseUnits } from '../../../../lib/solana'
+import { getMintDecimals, parseUnits, formatUnits } from '../../../../lib/solana'
+import { PublicKey } from '@solana/web3.js'
+import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import { stripTokens, mergeTokens } from '../../../../lib/kalend-client'
 import { TiltCard } from '../../../../components/TiltCard'
 
@@ -26,11 +28,31 @@ export default function StripMergePage() {
   const wallet = useWallet()
 
   const [activeTab, setActiveTab] = useState<'strip' | 'merge'>('strip')
-  const [amount, setAmount] = useState<string>('1000')
+  const [amount, setAmount] = useState<string>('1')
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
+
+  // Wallet balance for Max: collateral when stripping, min(PT, YT) when merging.
+  const { data: maxAmount } = useQuery({
+    queryKey: ['stripMax', seriesId, wallet.walletAddress, activeTab],
+    enabled: !!wallet.publicKey,
+    refetchInterval: 10_000,
+    queryFn: async () => {
+      const s = (await fetchAllSeries()).find((x) => x.pubkey === seriesId)
+      if (!s || !wallet.publicKey) return null
+      const bal = async (mint: string, program: PublicKey) => {
+        const ata = getAssociatedTokenAddressSync(new PublicKey(mint), wallet.publicKey!, false, program)
+        const r = await wallet.connection.getTokenAccountBalance(ata).catch(() => null)
+        return r ? BigInt(r.value.amount) : 0n
+      }
+      const decimals = await getMintDecimals(wallet.connection, s.collateral_mint)
+      if (activeTab === 'strip') return formatUnits(await bal(s.collateral_mint, new PublicKey(s.collateral_program)), decimals)
+      const [p, y] = await Promise.all([bal(s.pt_mint, TOKEN_2022_PROGRAM_ID), bal(s.yt_mint, TOKEN_2022_PROGRAM_ID)])
+      return formatUnits(p < y ? p : y, decimals)
+    },
+  })
 
   const { data: allSeries } = useQuery({
     queryKey: ['series'],
@@ -166,10 +188,10 @@ export default function StripMergePage() {
                         {activeTab === 'strip' ? 'Deposit Collateral Amount' : 'Merge PT/YT Amount'}
                       </span>
                       <button
-                        onClick={() => setAmount('1000000')}
+                        onClick={() => maxAmount && setAmount(maxAmount)}
                         className="text-[#4ade80] hover:underline"
                       >
-                        Max: 1,000,000
+                        Max: {maxAmount ?? '—'}
                       </button>
                     </div>
                     <div className="relative">
@@ -181,7 +203,7 @@ export default function StripMergePage() {
                         className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3.5 px-4 text-white font-mono text-lg focus:outline-none transition-colors"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 font-mono text-xs text-[#a8a8a8]">
-                        {series ? 'RAW' : 'TOKENS'}
+                        TOKENS
                       </span>
                     </div>
                   </div>
@@ -247,8 +269,8 @@ export default function StripMergePage() {
           }
           whatWillHappen={
             activeTab === 'strip'
-              ? `Transfers ${amount} raw collateral tokens into the on-chain Series vault and mints exactly ${amount} PT and ${amount} YT to your wallet.`
-              : `Burns ${amount} PT and ${amount} YT from your wallet and withdraws ${amount} raw collateral tokens from the on-chain vault back to you.`
+              ? `Transfers ${amount} collateral tokens into the on-chain Series vault and mints exactly ${amount} PT and ${amount} YT to your wallet.`
+              : `Burns ${amount} PT and ${amount} YT from your wallet and withdraws ${amount} collateral tokens from the on-chain vault back to you.`
           }
           whatItCosts="~0.002 SOL network fee + Token account rent"
           whatBecomesPublic={

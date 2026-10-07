@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js'
 import { SOLANA_RPC_URL } from './constants'
+import { ed25519 } from '@noble/curves/ed25519.js'
 
 export type WalletProviderType = 'solflare' | 'phantom' | 'backpack' | 'injected' | 'devnet_keypair'
 
@@ -271,8 +272,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const signMessage = useCallback(
     async (message: Uint8Array): Promise<Uint8Array> => {
       if (testKeypair) {
-        const nacl = await import('@noble/curves/ed25519.js')
-        return nacl.ed25519.sign(message, testKeypair.secretKey.subarray(0, 32))
+        return ed25519.sign(message, testKeypair.secretKey.subarray(0, 32))
       }
       const provider = getActiveProviderInstance()
       if (provider?.signMessage) {
