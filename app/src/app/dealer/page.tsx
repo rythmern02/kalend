@@ -336,10 +336,10 @@ export default function DealerDeskPage() {
             setSubmissionSuccess(false)
           }}
           onConfirm={handleQuoteSubmit}
-          actionName={`Submit Sealed Quote (${quotePrice} USDC)`}
-          whatWillHappen={`Encrypts your quote (${quotePrice} USDC for up to ${quoteMaxSize} PT) to the Chainlink CRE enclave public key and forwards ciphertext to the relay.`}
-          whatItCosts="Zero gas (Client-side Ed25519 signature + HPKE encryption)"
-          whatBecomesPublic="Zero order terms are public. Only the signed fill receipt touches Solana if your quote wins matching."
+          actionName={`Submit sealed quote @ ${quotePrice}`}
+          whatWillHappen={`Tops up your quote-asset escrow to a whole-token lot if needed, then signs your quote (${quotePrice} per unit, up to ${quoteMaxSize} raw) with your wallet and HPKE-seals it to the CRE workflow key. The relay receives ciphertext only.`}
+          whatItCosts="One lock_escrow transaction (~0.002 SOL incl. account rent) if the escrow needs topping up; sealing itself is free"
+          whatBecomesPublic="Your escrowed lot amount is public on Solana. Your price and size are not. If your quote wins, the fill (parties and amounts) is written on-chain; losing quotes are never published."
           isSubmitting={isSubmitting}
           txReceiptUrl={submissionSuccess ? 'https://explorer.solana.com' : undefined}
           error={actionError}

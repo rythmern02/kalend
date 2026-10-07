@@ -65,13 +65,13 @@ export default function ReceiptsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-8 mb-10 border-b border-[#222222] gap-4">
           <div>
             <span className="font-mono text-xs text-[#a8a8a8] uppercase tracking-wider block mb-2">
-              Institutional Trade Confirmation
+              Trade confirmations
             </span>
             <h1 className="font-serif text-3xl sm:text-4xl font-medium text-white mb-2">
               Settlement Receipts & Audit
             </h1>
             <p className="text-sm text-[#a8a8a8] max-w-xl">
-              Immutable on-chain FillReceipt PDAs and settlement records verified by Chainlink Keystone Forwarder reports.
+              Every FillReceipt account on Solana, read directly from the program. On devnet these reports arrive through the CRE mock forwarder (simulator), not the live Keystone Forwarder.
             </p>
           </div>
 
@@ -112,7 +112,7 @@ export default function ReceiptsPage() {
                 </div>
                 <h3 className="text-sm font-medium text-white mb-1">No Fills Found on Chain</h3>
                 <p className="text-[#737373] text-[11px] max-w-md mx-auto leading-relaxed">
-                  No executed settlement receipts found on Solana Devnet for this wallet. Completed RFQ fills settled through Chainlink Keystone Forwarder will appear here with cryptographic report hashes and on-chain explorer links.
+                  No FillReceipt accounts on devnet yet. Fills written through the CRE forwarder appear here with their report hash and explorer links.
                 </p>
               </div>
             ) : (
