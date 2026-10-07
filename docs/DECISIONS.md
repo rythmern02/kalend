@@ -96,3 +96,15 @@ All decisions diverging from or clarifying the initial specification are logged 
 - **Status**: All [VERIFY] items closed.
 
 
+
+## 2026-10-07 · Confidential (ZK ElGamal) mode: not shipped, fails closed
+- Probe: a bogus `VerifyZeroCiphertext` sent to `ZkE1Gama1Proof11111111111111111111111111111` on
+  devnet returned `proof verification failed: ElGamal(PubkeyDeserialization)`, so the proof program
+  is live on devnet (the local `solana feature status` list shows the re-enable feature as inactive;
+  that list is stale). Mainnet probe inconclusive (no fee payer funds).
+- Kalend never created ConfidentialTransferMint PT/YT: `initialize_confidential_series_tokens` only
+  logged "Activated ... ConfidentialTransferMint". Removed; `open_series` now rejects
+  `privacy_mode != Plain` with `ConfidentialModeUnavailable`. All deployed series are Plain.
+- Building it for real needs: manual mint creation with InitializeConfidentialTransferMint before
+  InitializeMint2, client-side ElGamal/AES keys and proof generation (ZK ElGamal WASM SDK), and
+  configure/deposit/apply/transfer UI. Settlement and escrow stay plain (PDA has no ElGamal key, G15).

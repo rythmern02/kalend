@@ -104,6 +104,13 @@ pub fn open_series_handler(
     dividend_cap_bps: u32,
     accept_issuer_risk: bool,
 ) -> Result<()> {
+    // Fail closed: the ConfidentialTransferMint extension must be initialized before the mint
+    // itself, which this instruction does not do yet. A previous version logged "activated"
+    // without enabling anything.
+    if privacy_mode != crate::state::PrivacyMode::Plain as u8 {
+        return err!(KalendError::ConfidentialModeUnavailable);
+    }
+
     let now = Clock::get()?.unix_timestamp;
     if maturity_ts <= now {
         return err!(KalendError::MaturityInPast);
@@ -160,14 +167,6 @@ pub fn open_series_handler(
         return err!(KalendError::RegistryFull);
     }
 
-    if privacy_mode == crate::state::PrivacyMode::Confidential as u8 {
-        initialize_confidential_series_tokens(
-            &ctx.accounts.pt_mint.to_account_info(),
-            &ctx.accounts.yt_mint.to_account_info(),
-            ctx.accounts.config.key(),
-        )?;
-    }
-
     emit!(SeriesOpened {
         series: series.key(),
         collateral_mint: series.collateral_mint,
@@ -179,19 +178,6 @@ pub fn open_series_handler(
         idx_open,
     });
 
-    Ok(())
-}
-
-fn initialize_confidential_series_tokens(
-    _pt_mint_info: &AccountInfo,
-    _yt_mint_info: &AccountInfo,
-    authority: Pubkey,
-) -> Result<()> {
-    // Activates native on-chain Token-2022 ledger privacy for institutional balances
-    msg!(
-        "Activated native Token-2022 ConfidentialTransferMint extension. Authority: {}",
-        authority
-    );
     Ok(())
 }
 

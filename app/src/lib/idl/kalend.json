@@ -2392,6 +2392,11 @@
       "code": 6037,
       "name": "MockForwarderForbidden",
       "msg": "MockForwarderForbidden: Mock forwarder address is strictly rejected in mainnet builds"
+    },
+    {
+      "code": 6038,
+      "name": "ConfidentialModeUnavailable",
+      "msg": "ConfidentialModeUnavailable: Confidential PT/YT mints are not implemented yet; open a Plain series"
     }
   ],
   "types": [

@@ -115,4 +115,7 @@ pub enum KalendError {
 
     #[msg("MockForwarderForbidden: Mock forwarder address is strictly rejected in mainnet builds")]
     MockForwarderForbidden,
+
+    #[msg("ConfidentialModeUnavailable: Confidential PT/YT mints are not implemented yet; open a Plain series")]
+    ConfidentialModeUnavailable,
 }
