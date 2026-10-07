@@ -52,8 +52,8 @@ async function monitorProtocol() {
   console.log(`Config PDA: ${CONFIG_PDA.toBase58()} (Size: ${configInfo.data.length} bytes)`);
   // Offset 8..40: authority
   const authority = new PublicKey(configInfo.data.subarray(8, 40));
-  // Offset 72: paused
-  const paused = configInfo.data.readUInt8(72) !== 0;
+  // Offset 297: paused (8 disc + 32 auth + 32 pend_auth + 2*96 forwarders + 1 count + 32 enclave_key_hash = 297)
+  const paused = configInfo.data.readUInt8(297) !== 0;
   console.log(`Protocol Authority: ${authority.toBase58()}`);
   console.log(`Emergency Pause: ${paused ? 'PAUSED' : 'ACTIVE'}`);
 

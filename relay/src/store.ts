@@ -8,7 +8,9 @@ export interface RfqRound {
   round_id: string // hex
   series: string
   kid: string
-  status: 'open' | 'sealed' | 'submitted' | 'approved' | 'executed' | 'cancelled'
+  // open -> sealed (sent to CRE) -> approved (FillReceipt on-chain) -> executed (execute_fill landed)
+  // or no_match / failed. 'approved' and 'executed' are only set from chain reads.
+  status: 'open' | 'sealed' | 'approved' | 'executed' | 'no_match' | 'failed'
   window_end: number
   created_at: number
   requests: SealedEnvelope[]
@@ -16,6 +18,7 @@ export interface RfqRound {
   fill_receipt?: string
   tx_hash?: string
   error?: string
+  execute_tx?: string
 }
 
 export interface RoundBundle {
@@ -89,7 +92,7 @@ export class RelayStore {
   updateRoundStatus(
     roundId: string,
     status: RfqRound['status'],
-    details?: { fill_receipt?: string; tx_hash?: string; error?: string }
+    details?: { fill_receipt?: string; tx_hash?: string; execute_tx?: string; error?: string }
   ): boolean {
     const round = this.rounds.get(roundId)
     if (!round) return false
@@ -98,6 +101,7 @@ export class RelayStore {
     if (details?.fill_receipt) round.fill_receipt = details.fill_receipt
     if (details?.tx_hash) round.tx_hash = details.tx_hash
     if (details?.error) round.error = details.error
+    if (details?.execute_tx) round.execute_tx = details.execute_tx
 
     this.broadcast({ type: 'round_updated', data: round })
     return true

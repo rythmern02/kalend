@@ -1,245 +1,121 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve } from '@hono/node-server'
-import { Connection, PublicKey } from '@solana/web3.js'
-import { store, type SealedEnvelope } from './store.js'
-import { creClient } from './cre-client.js'
-import { solanaWatcher } from './solana-watcher.js'
-import { AltCrankWorker } from './alt-crank.js'
+import { Keypair, PublicKey } from '@solana/web3.js'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import { store, type RfqRound } from './store.js'
+import { triggerRfqWorkflow, creMode } from './cre-client.js'
+import { KalendChain } from './chain.js'
+
+/**
+ * Kalend relay: a liveness and censorship point, not a confidentiality point.
+ * It stores ciphertext, schedules rounds, hands bundles to CRE and cranks execute_fill.
+ * It cannot read orders and cannot choose where a fill pays out.
+ */
 
 const app = new Hono()
-
 const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com'
-const programIdStr = process.env.PROGRAM_ID || 'Ft4JURMocjXUYn8JspAgs4DkH92HAWFs5JDTMZstf527'
-const altCrank = new AltCrankWorker({
-  connection: new Connection(rpcUrl, 'confirmed'),
-  programId: new PublicKey(programIdStr),
-  store,
-})
-altCrank.start(4000)
+const KID = process.env.ENCLAVE_KID || 'kid-2026-10-07'
+const MAX_WINDOW_SECS = 600
 
-// Enable CORS for frontend
-app.use(
-  '*',
-  cors({
-    origin: '*',
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  })
-)
-
-// Helper: evaluate operational mode dynamically from environment checks
-function getRelayOperationalStatus() {
-  const isLiveGateway = Boolean(process.env.CRE_GATEWAY_URL && process.env.CRE_GATEWAY_JWT)
-  const isSimAllowed =
-    process.env.KALEND_ALLOW_SIMULATION === '1' || process.env.RELAY_ALLOW_SIMULATION === '1'
-
-  const mode: 'production' | 'simulation' | 'degraded' = isLiveGateway
-    ? 'production'
-    : isSimAllowed
-      ? 'simulation'
-      : 'degraded'
-
-  return {
-    isLiveGateway,
-    isSimAllowed,
-    mode,
-    status: mode === 'degraded' ? 'degraded' : 'ok',
+function loadCrank(): Keypair | null {
+  const p = process.env.KALEND_CRANK_KEYPAIR || path.join(os.homedir(), '.config/solana/kalend-crank.json')
+  try {
+    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(p, 'utf-8'))))
+  } catch {
+    console.warn('[relay] no crank keypair; execute_fill must be called from the UI')
+    return null
   }
 }
 
-// Healthcheck & Operational Status
-app.get('/health', (c) => {
-  const op = getRelayOperationalStatus()
+const chain = new KalendChain(rpcUrl, loadCrank())
 
+app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'OPTIONS'], allowHeaders: ['Content-Type'] }))
+
+function isPubkey(s: unknown): s is string {
+  try {
+    return typeof s === 'string' && new PublicKey(s).toBase58() === s
+  } catch {
+    return false
+  }
+}
+
+/** Public view of a round: counts, never ciphertext bodies. */
+function view(r: RfqRound) {
+  return {
+    round_id: r.round_id,
+    series: r.series,
+    kid: r.kid,
+    status: r.status,
+    window_end: r.window_end,
+    created_at: r.created_at,
+    request_count: r.requests.length,
+    quote_count: r.quotes.length,
+    fill_receipt: r.fill_receipt,
+    execute_tx: r.execute_tx,
+    error: r.error,
+  }
+}
+
+app.get('/health', (c) => {
+  const cre = creMode()
   return c.json({
-    status: op.status,
+    status: cre.mode === 'simulator' ? 'ok' : 'degraded',
     service: 'kalend-relay',
-    version: '1.1.0',
-    mode: op.mode,
-    simulation_allowed: op.isSimAllowed,
-    cre_gateway: {
-      configured: op.isLiveGateway,
-      url: process.env.CRE_GATEWAY_URL || null,
+    cre: {
+      mode: cre.mode,
+      detail:
+        cre.mode === 'simulator'
+          ? 'Chainlink CRE local simulator with --broadcast (mock forwarder). Not an enclave.'
+          : cre.reason,
     },
-    enclave: {
-      key_hash:
-        process.env.ENCLAVE_KEY_HASH ||
-        'a1ec4ad5c6a287e156ae4260c1602ffed192df3fd89c7b6376a268289bb7e703',
-      kid: 'kid-2026-v1',
-      hardware: op.isLiveGateway
-        ? 'AWS Nitro Enclave (us-west-2)'
-        : 'Local Nitro Enclave Simulator (WASM/QuickJS)',
-    },
-    chain: {
-      cluster: 'solana-devnet',
-      program_id: programIdStr,
-      rpc: rpcUrl,
-    },
-    disclosures: [
-      'Decision 1: Enclave matches quotes confidentially; on-chain settlement splits and escrow payouts are visible upon leaving escrow on Solana.',
-      'Decision 2: Plain mode requires explicit confirmation; no silent fallback to plaintext.',
-      'Decision 3: USDY represented by test mint on Devnet; index set manually/oracle.',
-      'Decision 4: Equities deferred from active RFQ trading; 1,190 Backpack securities verified via /api/v1/securities preview only.',
-    ],
+    enclave_kid: KID,
+    crank: chain.crank?.publicKey.toBase58() ?? null,
+    chain: { cluster: 'devnet', program_id: chain.programId.toBase58(), rpc: rpcUrl },
     timestamp: Math.floor(Date.now() / 1000),
   })
 })
 
-// 1. Create a new RFQ Round
-app.post('/rfq/rounds', async (c) => {
-  const op = getRelayOperationalStatus()
-  if (!op.isLiveGateway && !op.isSimAllowed) {
-    return c.json(
-      {
-        error:
-          'Fail Closed Guard: Chainlink CRE live gateway credentials missing and simulation flag KALEND_ALLOW_SIMULATION != 1. Refusing to create unverified RFQ rounds.',
-        code: 'FAIL_CLOSED',
-      },
-      503
-    )
-  }
-
-  const body = await c.req.json().catch(() => ({}))
-  const series = body.series
-  if (!series) {
-    return c.json({ error: 'Missing series pubkey' }, 400)
-  }
-
-  const roundId = body.round_id || crypto.randomBytes(32).toString('hex')
-  const kid = body.kid || 'kid-2026-v1'
-  const duration = typeof body.duration === 'number' ? body.duration : 300
-
-  const round = store.createRound(roundId, series, kid, duration)
-  console.log(`[Relay] Opened new RFQ round ${roundId} for series ${series} (window: ${duration}s)`)
-
-  // Automatically trigger round close & matching when window expires
-  setTimeout(async () => {
-    const currentRound = store.getRound(roundId)
-    if (currentRound && currentRound.status === 'open') {
-      console.log(`[Relay] Round window expired for ${roundId}, sealing and triggering matching...`)
-      store.updateRoundStatus(roundId, 'sealed')
-      const result = await creClient.triggerRfqWorkflow({
-        kid: currentRound.kid,
-        round_id: currentRound.round_id,
-        series: currentRound.series,
-        requests: currentRound.requests,
-        quotes: currentRound.quotes,
+/** Poll Solana for the round's FillReceipt; the chain, not the relay, decides the outcome. */
+async function watchForReceipt(roundId: string, attempts = 45): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    const receipt = await chain.getFillReceipt(roundId).catch(() => null)
+    if (receipt) {
+      store.updateRoundStatus(roundId, receipt.status === 'Executed' ? 'executed' : 'approved', {
+        fill_receipt: receipt.address,
       })
-      store.updateRoundStatus(roundId, result.success ? 'submitted' : 'open', {
-        error: result.error,
-      })
-      solanaWatcher.startWatchingRound(roundId)
+      if (receipt.status === 'Approved' && chain.crank) await crankExecute(roundId)
+      return
     }
-  }, duration * 1000)
-
-  return c.json({ success: true, round })
-})
-
-// 2. List all rounds
-app.get('/rfq/rounds', (c) => {
-  return c.json({ rounds: store.listRounds() })
-})
-
-// 3. Get single round
-app.get('/rfq/rounds/:id', (c) => {
-  const round = store.getRound(c.req.param('id'))
-  if (!round) {
-    return c.json({ error: 'Round not found' }, 404)
+    await new Promise((r) => setTimeout(r, 2000))
   }
-  return c.json({ round })
-})
+}
 
-// 4. Submit Sealed Request Ciphertext
-app.post('/rfq/request', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const { round_id, enc, ciphertext, kid } = body
-
-  if (!round_id || !enc || !ciphertext || !kid) {
-    return c.json({ error: 'Missing required sealed envelope fields: round_id, enc, ciphertext, kid' }, 400)
+async function crankExecute(roundId: string): Promise<{ ok: boolean; tx?: string; error?: string }> {
+  try {
+    const tx = await chain.executeFill(roundId)
+    store.updateRoundStatus(roundId, 'executed', { execute_tx: tx })
+    console.log(`[relay] execute_fill landed for round ${roundId.slice(0, 8)}: ${tx}`)
+    return { ok: true, tx }
+  } catch (err: any) {
+    const msg = String(err?.message || err).slice(0, 400)
+    // Stay 'approved': anyone can retry execute_fill later.
+    store.updateRoundStatus(roundId, 'approved', { error: `execute_fill failed: ${msg}` })
+    console.warn(`[relay] execute_fill failed for round ${roundId.slice(0, 8)}: ${msg}`)
+    return { ok: false, error: msg }
   }
+}
 
-  // Auto-create round if not yet initialized in store
-  let round = store.getRound(round_id)
-  if (!round) {
-    const series = body.series || 'CSQJmtGu6s6KJ9wcfv8zY5LBioCnfcRenmFFB1pFPUwY'
-    const duration = typeof body.duration === 'number' ? body.duration : 300
-    round = store.createRound(round_id, series, kid, duration)
-    console.log(`[Relay] Opened new RFQ round ${round_id} on request submission (series: ${series}, window: ${duration}s)`)
-
-    setTimeout(async () => {
-      const currentRound = store.getRound(round_id)
-      if (currentRound && currentRound.status === 'open') {
-        console.log(`[Relay] Round window expired for ${round_id}, sealing and triggering matching...`)
-        store.updateRoundStatus(round_id, 'sealed')
-        const result = await creClient.triggerRfqWorkflow({
-          kid: currentRound.kid,
-          round_id: currentRound.round_id,
-          series: currentRound.series,
-          requests: currentRound.requests,
-          quotes: currentRound.quotes,
-        })
-        store.updateRoundStatus(round_id, result.success ? 'submitted' : 'open', {
-          error: result.error,
-        })
-        solanaWatcher.startWatchingRound(round_id)
-      }
-    }, duration * 1000)
-  }
-
-  const success = store.addRequest(round_id, { enc, ciphertext, kid })
-  if (!success) {
-    return c.json({ error: 'Failed to add request (round not found, closed, or payload too large)' }, 400)
-  }
-
-  console.log(`[Relay] Accepted sealed request ciphertext for round ${round_id} (enc len: ${enc.length}, ct len: ${ciphertext.length})`)
-  return c.json({ success: true, round_id })
-})
-
-// 5. Submit Sealed Quote Ciphertext
-app.post('/rfq/quote', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const { round_id, enc, ciphertext, kid } = body
-
-  if (!round_id || !enc || !ciphertext || !kid) {
-    return c.json({ error: 'Missing required sealed envelope fields: round_id, enc, ciphertext, kid' }, 400)
-  }
-
-  const success = store.addQuote(round_id, { enc, ciphertext, kid })
-  if (!success) {
-    return c.json({ error: 'Failed to add quote (round not found, closed, or payload too large)' }, 400)
-  }
-
-  console.log(`[Relay] Accepted sealed quote ciphertext for round ${round_id} (enc len: ${enc.length}, ct len: ${ciphertext.length})`)
-  return c.json({ success: true, round_id })
-})
-
-// 6. Manual Trigger for an RFQ round
-app.post('/rfq/rounds/:id/trigger', async (c) => {
-  const op = getRelayOperationalStatus()
-  if (!op.isLiveGateway && !op.isSimAllowed) {
-    return c.json(
-      {
-        error:
-          'Fail Closed Guard: Chainlink CRE live gateway credentials missing and simulation flag KALEND_ALLOW_SIMULATION != 1. Refusing to trigger unverified matching.',
-        code: 'FAIL_CLOSED',
-      },
-      503
-    )
-  }
-
-  const roundId = c.req.param('id')
+async function closeAndTrigger(roundId: string) {
   const round = store.getRound(roundId)
-
-  if (!round) {
-    return c.json({ error: 'Round not found' }, 404)
-  }
-
+  if (!round || round.status !== 'open') return { success: false, error: 'Round not open' }
   store.updateRoundStatus(roundId, 'sealed')
-  console.log(`[Relay] Manually triggered matching for round ${roundId}...`)
+  console.log(`[relay] round ${roundId.slice(0, 8)} sealed: ${round.requests.length} req / ${round.quotes.length} quotes`)
 
-  const result = await creClient.triggerRfqWorkflow({
+  const result = await triggerRfqWorkflow({
     kid: round.kid,
     round_id: round.round_id,
     series: round.series,
@@ -247,68 +123,112 @@ app.post('/rfq/rounds/:id/trigger', async (c) => {
     quotes: round.quotes,
   })
 
-  store.updateRoundStatus(roundId, result.success ? 'submitted' : 'open', {
-    error: result.error,
-  })
-
-  solanaWatcher.startWatchingRound(roundId)
-
-  return c.json({ success: result.success, result })
-})
-
-// 7. Execute Fill Phase 2 Crank Endpoint via Address Lookup Table (ALT)
-app.post('/rfq/rounds/:id/execute-fill', async (c) => {
-  const roundId = c.req.param('id')
-  const round = store.getRound(roundId)
-  if (!round || !round.fill_receipt) {
-    return c.json({ error: 'Round or fill_receipt not found' }, 404)
+  if (result.status === 'no_match') {
+    store.updateRoundStatus(roundId, 'no_match', { error: `No fill: ${result.reason}` })
+  } else if (result.status === 'written' && result.success) {
+    await watchForReceipt(roundId)
+  } else {
+    store.updateRoundStatus(roundId, 'failed', { error: result.error || result.status })
   }
+  return result
+}
 
-  const txSig = await altCrank.executeFillWithAlt(roundId, round.fill_receipt)
-  return c.json({ success: true, round_id: roundId, tx_hash: txSig })
+function scheduleClose(round: RfqRound) {
+  const ms = Math.max(0, round.window_end * 1000 - Date.now())
+  setTimeout(() => {
+    closeAndTrigger(round.round_id).catch((e) => console.error('[relay] trigger error', e))
+  }, ms)
+}
+
+app.post('/rfq/rounds', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  if (!isPubkey(body.series)) return c.json({ error: 'series must be a base58 Series address' }, 400)
+  const duration = Math.min(Math.max(Number(body.duration) || 120, 15), MAX_WINDOW_SECS)
+  const roundId = crypto.randomBytes(32).toString('hex')
+  const round = store.createRound(roundId, body.series, KID, duration)
+  scheduleClose(round)
+  return c.json({ success: true, round: view(round) })
 })
 
-// 8. Server-Sent Events (SSE) Stream for Frontend
-app.get('/rfq/events', (c) => {
+app.get('/rfq/rounds', (c) => c.json({ rounds: store.listRounds().map(view) }))
+
+app.get('/rfq/rounds/:id', (c) => {
+  const round = store.getRound(c.req.param('id'))
+  return round ? c.json({ round: view(round) }) : c.json({ error: 'Round not found' }, 404)
+})
+
+function intake(kind: 'request' | 'quote') {
+  return async (c: any) => {
+    const body = await c.req.json().catch(() => ({}))
+    const { round_id, enc, ciphertext, kid } = body
+    if (!round_id || !enc || !ciphertext || !kid) {
+      return c.json({ error: 'Missing sealed envelope fields: round_id, enc, ciphertext, kid' }, 400)
+    }
+    if (kid !== KID) return c.json({ error: `Unknown kid; current enclave key is ${KID}` }, 400)
+    const ok = kind === 'request'
+      ? store.addRequest(round_id, { enc, ciphertext, kid })
+      : store.addQuote(round_id, { enc, ciphertext, kid })
+    if (!ok) return c.json({ error: 'Round not found, closed, or envelope too large' }, 400)
+    return c.json({ success: true, round_id })
+  }
+}
+
+app.post('/rfq/request', intake('request'))
+app.post('/rfq/quote', intake('quote'))
+
+// Close the window early and hand the bundle to CRE.
+app.post('/rfq/rounds/:id/trigger', async (c) => {
+  const id = c.req.param('id')
+  if (!store.getRound(id)) return c.json({ error: 'Round not found' }, 404)
+  const result = await closeAndTrigger(id)
+  return c.json({ result, round: view(store.getRound(id)!) })
+})
+
+// Permissionless phase 2; the UI can also call execute_fill directly from a wallet.
+app.post('/rfq/rounds/:id/execute-fill', async (c) => {
+  const id = c.req.param('id')
+  const res = await crankExecute(id)
+  return c.json(res, res.ok ? 200 : 400)
+})
+
+// Fill receipts straight from Solana (getProgramAccounts on FillReceipt).
+app.get('/rfq/receipts', async (c) => {
+  try {
+    return c.json(await chain.listFillReceipts())
+  } catch (err: any) {
+    return c.json({ error: `RPC error: ${String(err?.message || err).slice(0, 200)}` }, 502)
+  }
+})
+
+app.get('/rfq/events', () => {
+  let cleanup = () => {}
   return new Response(
     new ReadableStream({
       start(controller) {
-        const encoder = new TextEncoder()
-
-        // Send initial connect message
-        controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`))
-
-        // Subscribe to store events
-        const unsubscribe = store.subscribe((event) => {
+        const enc = new TextEncoder()
+        const send = (s: string) => {
           try {
-            const message = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`
-            controller.enqueue(encoder.encode(message))
+            controller.enqueue(enc.encode(s))
           } catch {
-            // Stream closed
+            cleanup()
           }
-        })
-
-        // Heartbeat keep-alive every 15s
-        const heartbeat = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(`: heartbeat\n\n`))
-          } catch {
-            clearInterval(heartbeat)
-            unsubscribe()
-          }
-        }, 15000)
+        }
+        send(`event: connected\ndata: {}\n\n`)
+        const unsubscribe = store.subscribe((e) => send(`event: ${e.type}\ndata: ${JSON.stringify(view(e.data))}\n\n`))
+        const hb = setInterval(() => send(`: heartbeat\n\n`), 15000)
+        cleanup = () => {
+          clearInterval(hb)
+          unsubscribe()
+        }
+      },
+      cancel() {
+        cleanup()
       },
     }),
-    {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    }
+    { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' } }
   )
 })
 
-const port = Number(process.env.PORT) || 3001
-console.log(`[Relay] Kalend Sealed RFQ Relay starting on port ${port}...`)
+const port = Number(process.env.PORT || process.env.RELAY_PORT) || 3001
+console.log(`[relay] listening on :${port} · CRE ${creMode().mode} · program ${chain.programId.toBase58()}`)
 serve({ fetch: app.fetch, port })
