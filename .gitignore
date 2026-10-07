@@ -29,3 +29,9 @@ id.json
 .idea/
 *.tsbuildinfo
 .demo/
+
+# Local agent instructions (not published)
+AGENTS.md
+CLAUDE.md
+.claude/
+.agents/
