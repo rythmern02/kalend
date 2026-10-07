@@ -120,7 +120,7 @@ async function main() {
 
   // 3. Open Series with short maturity (8 seconds)
   const nonce = Math.floor(Math.random() * 65535);
-  const maturityTs = Math.floor(Date.now() / 1000) + 8;
+  const maturityTs = Math.floor(Date.now() / 1000) + 45;
   console.log(`\n[Step 3] Opening short-dated Series (maturity in 8s, ts: ${maturityTs}, nonce: ${nonce})...`);
 
   const maturityBuffer = Buffer.alloc(8);
@@ -145,7 +145,7 @@ async function main() {
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
 
-  const idxOpen = new BN("1000000000000000000"); // 1.0 WAD (1e18)
+  const idxOpen = new BN("1000000000000000000"); // ignored for StakePoolRate: read on-chain
 
   const openTx = await program.methods
     .openSeries(
@@ -174,6 +174,7 @@ async function main() {
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
+    .remainingAccounts([{ pubkey: DEVNET_STAKE_POOL, isSigner: false, isWritable: false }]) // program reads idx_open from the pool
     .signers([ptKeypair, ytKeypair])
     .rpc();
   console.log(`✓ Series opened! Tx: ${openTx}`);
