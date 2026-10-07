@@ -131,6 +131,12 @@ export default function RoundStatusPage() {
             <span className="font-mono text-xs text-[#737373] uppercase tracking-wider">Lifecycle</span>
             <DataSourceTag sourceName={receipt ? 'Solana FillReceipt account' : 'Relay scheduler'} />
           </div>
+          <div className="h-px bg-white/10 mb-5 overflow-hidden" aria-hidden>
+            <div
+              className="h-full bg-[#4ade80] origin-left motion-safe:transition-transform motion-safe:duration-[400ms] motion-safe:ease-out"
+              style={{ transform: `scaleX(${Math.min(stage, 5) / 5})` }}
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             {steps.map((st, idx) => {
               const Icon = st.icon
