@@ -1,5 +1,10 @@
 staging-settings:
-  rpcs: []
+  rpcs:
+    - chain-name: solana-devnet
+      url: https://api.devnet.solana.com
 production:
   rpcs: []
-local-simulation: {}
+local-simulation:
+  rpcs:
+    - chain-name: solana-devnet
+      url: https://api.devnet.solana.com

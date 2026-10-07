@@ -10,11 +10,8 @@ import {
 } from '@chainlink/cre-sdk'
 import { PublicKey } from '@solana/web3.js'
 import { address } from '@solana/addresses'
-import { x25519, ed25519 } from '@noble/curves/ed25519.js'
-import { chacha20poly1305 } from '@noble/ciphers/chacha.js'
-import { hkdf } from '@noble/hashes/hkdf.js'
-import { sha256 } from '@noble/hashes/sha2.js'
-import { utf8ToBytes, bytesToHex, hexToBytes, concatBytes } from '@noble/hashes/utils.js'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
+import { matchRound, type RoundBundle } from './match'
 import { Kalend } from '../../../contracts/solana/ts/generated/Kalend.js'
 
 export interface RfqConfig {
@@ -30,66 +27,7 @@ export interface RfqConfig {
   secretId: string
 }
 
-export interface SealedEnvelope {
-  enc: string // hex
-  ciphertext: string // hex
-  kid: string
-}
-
-export interface RoundBundle {
-  kid: string
-  round_id: string
-  series: string
-  requests: SealedEnvelope[]
-  quotes: SealedEnvelope[]
-}
-
-interface RequestOrder {
-  v: number
-  round_id: string
-  series: string
-  side: 'SellPT' | 'SellYT'
-  size: string
-  limit_price: string
-  quote_mint: string
-  requester: string
-  nonce: number
-  not_after: number
-}
-
-interface QuoteOrder {
-  v: number
-  round_id: string
-  dealer: string
-  price: string
-  max_size: string
-  nonce: number
-  not_after: number
-}
-
-interface SignedEnvelope<T> {
-  payload: T
-  sig: string
-  pubkey: string
-}
-
-/**
- * Pure JS HPKE Open (RFC 9180 Base Mode) inside TEE
- */
-function hpkeOpen(
-  privKey: Uint8Array,
-  enc: Uint8Array,
-  info: Uint8Array,
-  aad: Uint8Array,
-  ciphertext: Uint8Array
-): Uint8Array {
-  const sharedSecret = x25519.getSharedSecret(privKey, enc)
-  const keyAndNonce = hkdf(sha256, sharedSecret, new Uint8Array(0), info, 44)
-  const key = keyAndNonce.subarray(0, 32)
-  const nonce = keyAndNonce.subarray(32, 44)
-  const cipher = chacha20poly1305(key, nonce, aad)
-  return cipher.decrypt(ciphertext)
-}
+export type { RoundBundle, SealedEnvelope } from './match'
 
 /**
  * Derives the forwarder authority PDA: ["forwarder", forwarderState, receiverProgram]
@@ -128,230 +66,67 @@ export const onHttpTriggerInTee = (
   const config = runtime.config
   const now = Math.floor(runtime.now().getTime() / 1000)
 
-  // 1. Fetch enclave decryption key from Vault DON secret
+  // 1. Enclave decryption key from the Vault DON (released only to an attested enclave when
+  //    deployed; in the local simulator it comes from the simulator's secrets file).
   const secretHex = runtime.getSecret({ id: config.secretId }).result().value
-  const enclavePrivKey = hexToBytes(secretHex.trim())
+  const enclaveSecret = hexToBytes(secretHex.trim())
 
-  // 2. Parse Trigger Payload containing RoundBundle
-  const bodyText = event.input ? new TextDecoder().decode(event.input) : ''
-  const bundle = JSON.parse(bodyText) as RoundBundle
+  // 2. Round bundle: ciphertexts only (the relay never sees plaintext).
+  const bundle = JSON.parse(new TextDecoder().decode(event.input)) as RoundBundle
 
-  const roundIdBytes = hexToBytes(bundle.round_id)
-  const kidBytes = utf8ToBytes(bundle.kid)
-  const info = concatBytes(utf8ToBytes('kalend/v1/rfq'), roundIdBytes, kidBytes)
-  const aad = concatBytes(new Uint8Array([1, 1]), roundIdBytes, kidBytes)
-
-  // 3. Decrypt and verify Requester orders
-  const validRequests: RequestOrder[] = []
-  for (const encReq of bundle.requests) {
-    try {
-      const plaintext = hpkeOpen(
-        enclavePrivKey,
-        hexToBytes(encReq.enc),
-        info,
-        aad,
-        hexToBytes(encReq.ciphertext)
-      )
-      const signed = JSON.parse(new TextDecoder().decode(plaintext)) as SignedEnvelope<RequestOrder>
-      const payloadStr = JSON.stringify(signed.payload)
-      const domainTag = utf8ToBytes('KALEND/v1/request')
-      const digest = sha256(concatBytes(domainTag, utf8ToBytes(payloadStr)))
-      const isSigValid = ed25519.verify(hexToBytes(signed.sig), digest, hexToBytes(signed.pubkey))
-
-      if (
-        isSigValid &&
-        signed.payload.round_id === bundle.round_id &&
-        signed.payload.series === bundle.series &&
-        signed.payload.not_after > now
-      ) {
-        validRequests.push(signed.payload)
-      }
-    } catch {
-      // Fail closed on invalid ciphertext or signature; do not log plaintext
-    }
+  // 3. Decrypt, verify wallet signatures + identity binding, match. Nothing is logged.
+  const result = matchRound(enclaveSecret, bundle, now)
+  if (result.status !== 'filled') {
+    return JSON.stringify({ status: 'no_match', round_id: bundle.round_id, reason: result.reason })
   }
+  const fill = result.fill
 
-  // 4. Decrypt and verify Dealer orders
-  const validQuotes: QuoteOrder[] = []
-  for (const encQuote of bundle.quotes) {
-    try {
-      const plaintext = hpkeOpen(
-        enclavePrivKey,
-        hexToBytes(encQuote.enc),
-        info,
-        aad,
-        hexToBytes(encQuote.ciphertext)
-      )
-      const signed = JSON.parse(new TextDecoder().decode(plaintext)) as SignedEnvelope<QuoteOrder>
-      const payloadStr = JSON.stringify(signed.payload)
-      const domainTag = utf8ToBytes('KALEND/v1/quote')
-      const digest = sha256(concatBytes(domainTag, utf8ToBytes(payloadStr)))
-      const isSigValid = ed25519.verify(hexToBytes(signed.sig), digest, hexToBytes(signed.pubkey))
-
-      if (
-        isSigValid &&
-        signed.payload.round_id === bundle.round_id &&
-        signed.payload.not_after > now
-      ) {
-        validQuotes.push(signed.payload)
-      }
-    } catch {
-      // Fail closed on invalid ciphertext or signature
-    }
-  }
-
-  if (validRequests.length === 0 || validQuotes.length === 0) {
-    return JSON.stringify({ status: 'no_match', reason: 'insufficient_valid_orders' })
-  }
-
-  // 5. Sealed Matching Engine
-  // Match single request with best dealer quote (highest price for PT/YT seller)
-  const req = validRequests[0]
-  const reqLimitPrice = BigInt(Math.floor(parseFloat(req.limit_price) * 1_000_000))
-
-  // Filter quotes meeting limit price
-  const eligibleQuotes = validQuotes.filter((q) => {
-    const qPrice = BigInt(Math.floor(parseFloat(q.price) * 1_000_000))
-    return qPrice >= reqLimitPrice
-  })
-
-  if (eligibleQuotes.length === 0) {
-    return JSON.stringify({ status: 'no_match', reason: 'no_quotes_meet_limit_price' })
-  }
-
-  // 5. Multi-Dealer Knapsack / Waterfall Matching Engine
-  // Sort eligible quotes by price descending (highest bid first for the seller)
-  // Tie-break deterministically using sha256(round_id || dealer)
-  eligibleQuotes.sort((a, b) => {
-    const priceA = BigInt(Math.floor(parseFloat(a.price) * 1_000_000))
-    const priceB = BigInt(Math.floor(parseFloat(b.price) * 1_000_000))
-    if (priceB !== priceA) {
-      return priceB > priceA ? 1 : -1
-    }
-    const hashA = bytesToHex(sha256(concatBytes(roundIdBytes, hexToBytes(a.dealer))))
-    const hashB = bytesToHex(sha256(concatBytes(roundIdBytes, hexToBytes(b.dealer))))
-    return hashA.localeCompare(hashB)
-  })
-
-  // Greedy Knapsack Allocation: satisfy requested size across best quotes (up to 8 dealers)
-  interface TrancheFill {
-    dealer: string
-    price: bigint
-    assetAmount: bigint
-    quoteAmount: bigint
-    notAfter: number
-  }
-
-  const trancheFills: TrancheFill[] = []
-  let remainingAssetSize = BigInt(req.size)
-  let totalAssetMatched = 0n
-  let totalQuoteMatched = 0n
-
-  for (const quote of eligibleQuotes) {
-    if (remainingAssetSize === 0n) break
-    if (trancheFills.length >= 8) break // Max 8 fills per round cap
-
-    const qPrice = BigInt(Math.floor(parseFloat(quote.price) * 1_000_000))
-    const qMaxSize = BigInt(quote.max_size)
-
-    const fillAsset = remainingAssetSize < qMaxSize ? remainingAssetSize : qMaxSize
-    if (fillAsset <= 0n) continue
-
-    const fillQuote = (fillAsset * qPrice) / 1_000_000n
-
-    trancheFills.push({
-      dealer: quote.dealer,
-      price: qPrice,
-      assetAmount: fillAsset,
-      quoteAmount: fillQuote,
-      notAfter: Math.min(req.not_after, quote.not_after),
-    })
-
-    totalAssetMatched += fillAsset
-    totalQuoteMatched += fillQuote
-    remainingAssetSize -= fillAsset
-  }
-
-  if (trancheFills.length === 0) {
-    return JSON.stringify({ status: 'no_match', reason: 'allocation_failed' })
-  }
-
-  const primaryFill = trancheFills[0]
-  const notAfter = Math.min(...trancheFills.map((f) => f.notAfter))
-  const sideByte = req.side === 'SellPT' ? 0 : 1
-
-  // 6. Build FillReport Struct for On-Chain Execution
   const fillReport = {
     kind: 1,
     version: 1,
-    roundId: Array.from(roundIdBytes),
-    series: address(req.series),
-    side: sideByte,
-    requester: address(req.requester),
-    dealer: address(primaryFill.dealer),
-    assetAmount: totalAssetMatched,
-    quoteAmount: totalQuoteMatched,
-    quoteMint: address(req.quote_mint),
-    notAfter: BigInt(notAfter),
+    roundId: Array.from(fill.roundId),
+    series: address(fill.series),
+    side: fill.side,
+    requester: address(fill.requester),
+    dealer: address(fill.dealer),
+    assetAmount: fill.assetAmount,
+    quoteAmount: fill.quoteAmount,
+    quoteMint: address(fill.quoteMint),
+    notAfter: BigInt(fill.notAfter),
   }
 
-  // 7. Derive Accounts for Keystone Forwarder -> on_report
+  // 4. Accounts for forwarder -> on_report (docs/REPORT_ACCOUNTS.md). The forwarder strips
+  //    [0] and [1]; on_report sees [config, series, fill_receipt, rent_vault, system].
   const forwarderAuthority = deriveForwarderAuthority(
     config.forwarderProgram,
     config.forwarderState,
     config.programId
   )
-  const fillReceiptPda = deriveFillReceiptPda(roundIdBytes, config.programId)
-
-  // Remaining accounts layout:
-  // [0]: forwarderState
-  // [1]: forwarderAuthority
-  // [2]: configPda
-  // [3]: seriesPda
-  // [4]: fillReceiptPda
-  // [5]: rentVaultPda
-  // [6]: systemProgram
+  const fillReceiptPda = deriveFillReceiptPda(fill.roundId, config.programId)
   const remainingAccounts: SolanaAccountMeta[] = [
     solanaAccountMeta(config.forwarderState, false),
     solanaAccountMeta(forwarderAuthority, false),
     solanaAccountMeta(config.configPda, false),
-    solanaAccountMeta(req.series, false),
+    solanaAccountMeta(fill.series, false),
     solanaAccountMeta(fillReceiptPda, true),
     solanaAccountMeta(config.rentVaultPda, true),
     solanaAccountMeta('11111111111111111111111111111111', false),
   ]
 
-  // 8. Cross back to DON for Solana on-chain write
+  // 5. Cross back to the DON for consensus signing + Solana write. Only the fill leaves.
   const don = runtime.usingTheDons()
-
-  if (config.mode === 'local-simulation') {
-    return JSON.stringify({
-      status: 'matched_simulation',
-      round_id: bundle.round_id,
-      series: req.series,
-      asset_amount: totalAssetMatched.toString(),
-      quote_amount: totalQuoteMatched.toString(),
-      fill_receipt: fillReceiptPda,
-      tranche_count: trancheFills.length,
-    })
-  }
-
-  const solanaClient = new SolanaClient(BigInt(config.chainSelector))
-  const kalend = new Kalend(solanaClient, config.programId)
-
-  const writeResult = kalend.writeReportFromFillReport(
-    don,
-    fillReport,
-    remainingAccounts,
-    { computeLimit: 350_000 }
-  )
+  const kalend = new Kalend(new SolanaClient(BigInt(config.chainSelector)), config.programId)
+  const write = kalend.writeReportFromFillReport(don, fillReport, remainingAccounts, {
+    computeLimit: 200_000,
+  }) as any
 
   return JSON.stringify({
     status: 'filled',
     round_id: bundle.round_id,
-    series: req.series,
     fill_receipt: fillReceiptPda,
-    txResult: writeResult ? JSON.stringify(writeResult) : undefined,
+    tx_status: write?.txStatus ?? null,
+    receiver_status: write?.receiverContractExecutionStatus ?? null,
+    tx_signature_hex: write?.txSignature ? bytesToHex(write.txSignature) : null,
   })
 }
 
