@@ -50,7 +50,7 @@ export default function TrustPage() {
             Trust & Verification
           </h1>
           <p className="text-sm text-[#a8a8a8] max-w-2xl leading-relaxed">
-            Every cryptographic assumption, hardware enclave boundary, and on-chain configuration parameter is stated out loud without marketing euphemisms.
+            What each party can and cannot see or do, stated plainly. Where something is simulated or trusted, it says so.
           </p>
         </div>
 
@@ -73,7 +73,7 @@ export default function TrustPage() {
             <div className="p-3 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
               <span className="text-[#737373] block mb-1">Protocol Authority</span>
               <span className="text-white truncate block">
-                {config?.authority || 'Pga9...SoLnX'}
+                {config?.authority ?? 'reading…'}
               </span>
             </div>
 
@@ -101,10 +101,10 @@ export default function TrustPage() {
 
           <div className="p-4 bg-[#0d0d0d] border border-[#242424] rounded-[2px] font-mono text-xs">
             <span className="text-[#a8a8a8] uppercase text-[10px] block mb-1">
-              Time-Locked Enclave Key Rotation Policy
+              Enclave key rotation
             </span>
             <p className="text-[#a8a8a8] leading-relaxed text-[11px]">
-              The Enclave Public Key is published for public transparency. Any key change requires an on-chain event log and a 48-hour time lock before activation. Dealers verify that the key belongs to an active, attested workflow.
+              The browser seals orders to this X25519 public key; its sha256 is committed on-chain in Config.enclave_key_hash and rotated by the authority with set_enclave_key_hash (an EnclaveKeyRotated event, no time lock). Compare the two before sealing. Users cannot yet verify enclave attestation themselves.
             </p>
           </div>
         </div>
@@ -124,19 +124,19 @@ export default function TrustPage() {
               <ul className="space-y-3 font-mono text-xs text-[#a8a8a8]">
                 <li className="flex items-start gap-2">
                   <span className="text-white">•</span>
-                  <span><strong>Zero Admin Fund Extraction (INV3):</strong> No admin instruction can move user collateral, escrow tokens, or vault balances.</span>
+                  <span><strong>No admin withdrawal (INV7):</strong> no instruction lets the authority move vault or escrow balances; they only go to the owner or counterparty by the program's formulas.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-white">•</span>
-                  <span><strong>Collateral Conservation (INV1):</strong> Vault balance strictly equals total PT supply. Funds cannot be minted unbacked.</span>
+                  <span><strong>Collateral backing (INV1, INV2):</strong> before settlement the vault holds at least the outstanding PT supply, and PT supply equals YT supply.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-white">•</span>
-                  <span><strong>Zero Plaintext to Relay:</strong> The relay sees only opaque ciphertexts and timestamps.</span>
+                  <span><strong>Relay sees ciphertext only:</strong> it learns timing and ciphertext sizes, and can delay or drop a round, but cannot read orders or choose where a fill pays out.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-white">•</span>
-                  <span><strong>Replay Prevention:</strong> FillReceipt PDAs keyed by unique round_id prevent duplicated forwarder execution.</span>
+                  <span><strong>Replay prevention (INV5):</strong> a FillReceipt PDA keyed by round_id can be created once; execute_fill runs once.</span>
                 </li>
               </ul>
             </div>
@@ -149,15 +149,15 @@ export default function TrustPage() {
               <ul className="space-y-3 font-mono text-xs text-[#a8a8a8]">
                 <li className="flex items-start gap-2">
                   <span className="text-[#fbbf24]">•</span>
-                  <span><strong>Hardware TEE & Enclave:</strong> Privacy relies on AWS Nitro Enclaves and Chainlink Vault DON security.</span>
+                  <span><strong>The team can read orders.</strong> We generated and hold the enclave decryption key. On devnet the RFQ workflow runs in the Chainlink CRE local simulator, which is not a hardware enclave. A deployed confidential workflow (AWS Nitro, pending CRE enrollment) would protect orders from the public, the relay and node operators, not from the team.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#fbbf24]">•</span>
-                  <span><strong>Chainlink DON Consensus:</strong> Forwarder CPI reports rely on Chainlink DON signature thresholds.</span>
+                  <span><strong>Forwarder trust:</strong> deployed reports rely on Chainlink DON signatures checked by the Keystone Forwarder. Simulator runs go through the CRE mock forwarder, which devnet Config also accepts; a mainnet build rejects it at compile time. The program re-checks clocks and index bounds, so a bad report can delay a series but not mature it early.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[#fbbf24]">•</span>
-                  <span><strong>RWA Issuer Policy:</strong> Tokenized equities and USDY carry issuer pause / permanent delegate authority under Token-2022.</span>
+                  <span><strong>Escrows are public:</strong> escrowed amounts and fill amounts are visible on Solana. Sealing hides limits, losing quotes and who bid, not the executed trade.</span>
                 </li>
               </ul>
             </div>

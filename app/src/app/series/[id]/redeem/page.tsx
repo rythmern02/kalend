@@ -20,7 +20,8 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAllSeries } from '../../../../lib/api'
 
 import { useWallet } from '../../../../lib/wallet'
-import { redeemPt, claimYt } from '../../../../lib/kalend-client'
+import { getMintDecimals, parseUnits } from '../../../../lib/solana'
+import { redeemPt, claimYt, settleOnchain } from '../../../../lib/kalend-client'
 import { TiltCard } from '../../../../components/TiltCard'
 
 export default function MaturityRedeemPage() {
@@ -36,18 +37,37 @@ export default function MaturityRedeemPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [receiptUrl, setReceiptUrl] = useState<string | undefined>()
 
-  const { data: allSeries } = useQuery({
+  const { data: allSeries, refetch: refetchSeries } = useQuery({
     queryKey: ['series'],
     queryFn: fetchAllSeries,
   })
 
-  const series = allSeries?.find((s) => s.pubkey === seriesId) || allSeries?.[0]
+  const series = allSeries?.find((s) => s.pubkey === seriesId)
 
   // Plain-sentence settlement math:
   // pt_redeem_raw = a * idx_open / idx_settle
   // yt_claim_raw = a - pt_redeem_raw
-  const idxOpen = series && Number(series.idx_open) > 0 ? Number(series.idx_open) / 1e18 : 1.0
-  const idxSettle = series && Number(series.idx_settle) > 0 ? Number(series.idx_settle) / 1e18 : idxOpen
+  const isSettled = series?.status === 1
+  const isMatured = series ? series.maturity_ts <= Math.floor(Date.now() / 1000) : false
+  const idxOpen = series && BigInt(series.idx_open) > 0n ? Number(BigInt(series.idx_open) / 10n ** 9n) / 1e9 : 1.0
+  const idxSettle = series && isSettled ? Number(BigInt(series.idx_settle) / 10n ** 9n) / 1e9 : idxOpen
+  const [settleBusy, setSettleBusy] = useState(false)
+
+  const handleSettle = async () => {
+    if (!wallet.connected) return wallet.setShowConnectModal(true)
+    if (!series) return
+    setSettleBusy(true)
+    setActionError(null)
+    try {
+      const sig = await settleOnchain(wallet, { seriesPubkey: series.pubkey, indexSourcePubkey: series.index_source })
+      setReceiptUrl(`https://explorer.solana.com/tx/${sig}?cluster=devnet`)
+      await refetchSeries()
+    } catch (err: any) {
+      setActionError(err.message || 'Settlement rejected on-chain')
+    } finally {
+      setSettleBusy(false)
+    }
+  }
   const ptRedeemUnit = idxSettle > 0 ? (Math.min(idxOpen, idxSettle) / idxSettle).toFixed(6) : '1.000000'
   const ytClaimUnit = idxSettle > 0 ? (Math.max(0, idxSettle - idxOpen) / idxSettle).toFixed(6) : '0.000000'
 
@@ -66,13 +86,13 @@ export default function MaturityRedeemPage() {
     try {
       let txSig: string
       if (activeModal === 'pt') {
-        const parsedAmount = BigInt(Math.floor(Number(redeemPtAmount) * 1e9))
+        const parsedAmount = parseUnits(redeemPtAmount, await getMintDecimals(wallet.connection, series.collateral_mint))
         txSig = await redeemPt(wallet, {
           seriesPubkey: series.pubkey,
           amount: parsedAmount,
         })
       } else {
-        const parsedAmount = BigInt(Math.floor(Number(claimYtAmount) * 1e9))
+        const parsedAmount = parseUnits(claimYtAmount, await getMintDecimals(wallet.connection, series.collateral_mint))
         txSig = await claimYt(wallet, {
           seriesPubkey: series.pubkey,
           amount: parsedAmount,
@@ -109,7 +129,7 @@ export default function MaturityRedeemPage() {
             Maturity Settlement & Redemption
           </h1>
           <p className="text-sm text-[#a8a8a8] max-w-2xl leading-relaxed">
-            The Chainlink CRE Oracle workflow attested the final maturity index. Redeem Principal Tokens for underlying collateral, or claim accumulated yield using Yield Tokens.
+            After maturity anyone can settle a stake-pool series: the program reads the pool's exchange rate itself. Then PT redeems principal and YT claims the growth, both in kind.
           </p>
         </div>
 
@@ -132,21 +152,23 @@ export default function MaturityRedeemPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 font-mono text-xs mb-6">
               <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-                <span className="text-[#737373] block mb-1">Initial Opening Index</span>
-                <span className="text-xl text-white font-medium block">1.000000 WAD</span>
-                <span className="text-[11px] text-[#737373]">At series opening</span>
+                <span className="text-[#737373] block mb-1">Index at open</span>
+                <span className="text-xl text-white font-medium block">{idxOpen.toFixed(9)}</span>
+                <span className="text-[11px] text-[#737373]">Series.idx_open (on-chain)</span>
               </div>
 
               <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-                <span className="text-[#737373] block mb-1">Attested Settlement Index</span>
-                <span className="text-xl text-[#4ade80] font-medium block">1.071200 WAD</span>
-                <span className="text-[11px] text-[#4ade80]">+7.12% Realized Yield</span>
+                <span className="text-[#737373] block mb-1">Index at settlement</span>
+                <span className="text-xl text-[#4ade80] font-medium block">{isSettled ? idxSettle.toFixed(9) : 'not settled'}</span>
+                <span className="text-[11px] text-[#4ade80]">
+                  {isSettled ? `${((idxSettle / idxOpen - 1) * 100).toFixed(4)}% growth over the term` : 'Settles at or after maturity by the on-chain clock'}
+                </span>
               </div>
 
               <div className="p-4 bg-[#121212] rounded-[2px] border border-[#1e1e1e]">
-                <span className="text-[#737373] block mb-1">Corporate Split Ratio</span>
-                <span className="text-xl text-white font-medium block">1.0 : 1.0</span>
-                <span className="text-[11px] text-[#737373]">No dilution adjustment</span>
+                <span className="text-[#737373] block mb-1">Maturity</span>
+                <span className="text-xl text-white font-medium block">{series ? new Date(series.maturity_ts * 1000).toISOString().slice(0, 16).replace('T', ' ') : '—'}</span>
+                <span className="text-[11px] text-[#737373]">UTC</span>
               </div>
             </div>
 
@@ -161,6 +183,23 @@ export default function MaturityRedeemPage() {
             </div>
           </div>
         </TiltCard>
+
+        {!series && (
+          <div className="p-4 mb-8 rounded-[2px] border border-[#4a1b1b] bg-[#1f0c0c] font-mono text-xs text-[#f87171]">
+            Series {seriesId} is not in the on-chain Registry.
+          </div>
+        )}
+
+        {series && isMatured && !isSettled && (
+          <div className="p-5 mb-8 rounded-[3px] border border-[#4d360d] bg-[#1f1505] flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+            <span className="text-[#fbbf24]">
+              Matured, not yet settled. settle_onchain is permissionless: it reads the stake pool rate on-chain and records idx_settle once.
+            </span>
+            <button onClick={handleSettle} disabled={settleBusy} className="px-4 py-2 rounded-[2px] bg-white text-black font-semibold disabled:opacity-50 shrink-0">
+              {settleBusy ? 'Settling…' : 'Settle series'}
+            </button>
+          </div>
+        )}
 
         {/* Action Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
@@ -177,7 +216,7 @@ export default function MaturityRedeemPage() {
                   Redeem PT for Collateral
                 </h3>
                 <p className="text-xs text-[#a8a8a8] mb-6 leading-relaxed">
-                  Burn Principal Tokens to claim your guaranteed underlying collateral allocation.
+                  Burn PT to receive principal in kind: amount x min(idx_open, idx_settle) / idx_settle.
                 </p>
 
                 <div className="space-y-4 mb-6 font-mono text-xs">

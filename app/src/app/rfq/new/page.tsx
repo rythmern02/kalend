@@ -27,6 +27,9 @@ import { VisibilityItem } from '../../../lib/types'
 import { useWallet } from '../../../lib/wallet'
 import { sealOrderEnvelopeWithSigner } from '../../../lib/crypto'
 import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../../../lib/constants'
+import { PublicKey } from '@solana/web3.js'
+import { lockEscrow } from '../../../lib/kalend-client'
+import { deriveEscrowPda } from '../../../lib/solana'
 import { TiltCard } from '../../../components/TiltCard'
 
 export default function NewRfqPage() {
@@ -37,7 +40,6 @@ export default function NewRfqPage() {
 
   // Wizard state
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [vaultTier, setVaultTier] = useState<'conservative' | 'balanced' | 'alpha'>('conservative')
   const [side, setSide] = useState<'SellPT' | 'SellYT'>('SellPT')
   const [size, setSize] = useState<string>('1000000')
   const [limitRateBps, setLimitRateBps] = useState<number>(495) // 4.95%
@@ -53,9 +55,13 @@ export default function NewRfqPage() {
     queryFn: fetchAllSeries,
   })
 
-  // Selected series based on tier
-  const kindMap: Record<string, number> = { conservative: 3, balanced: 0, alpha: 1 }
-  const selectedSeries = allSeries?.find((s) => s.index_kind === kindMap[vaultTier]) || allSeries?.[0]
+  // Tradable series: Open (status 0) and not yet matured, newest maturity first
+  const nowSecs = Math.floor(Date.now() / 1000)
+  const openSeries = (allSeries ?? [])
+    .filter((s) => s.status === 0 && s.maturity_ts > nowSecs + 600)
+    .sort((a, b) => b.maturity_ts - a.maturity_ts)
+  const [seriesPick, setSeriesPick] = useState<string>('')
+  const selectedSeries = openSeries.find((s) => s.pubkey === seriesPick) ?? openSeries[0]
 
   const daysLeft = selectedSeries
     ? Math.max(1, Math.ceil((selectedSeries.maturity_ts - Date.now() / 1000) / 86400))
@@ -68,7 +74,7 @@ export default function NewRfqPage() {
   const visibilityItems: VisibilityItem[] = [
     {
       label: 'Order Type',
-      value: `${side} (${vaultTier.toUpperCase()})`,
+      value: side,
       visibility: 'sealed',
       description: 'Encrypted in client-side HPKE envelope',
     },
@@ -82,13 +88,13 @@ export default function NewRfqPage() {
       label: 'Limit Execution Price',
       value: `$${impliedPrice} (${(limitRateBps / 100).toFixed(2)}% APY)`,
       visibility: 'sealed',
-      description: 'Decrypted solely within AWS Nitro TEE enclave',
+      description: 'Decrypted only inside the CRE workflow (local simulator on devnet, not an enclave)',
     },
     {
       label: 'Escrow Locked',
-      value: `${size} PT Collateral`,
-      visibility: modeBarState.isPrivacyMode ? 'enclave_only' : 'public_solana',
-      description: 'Locked in program Escrow PDA for RFQ duration',
+      value: `${size} ${side === 'SellPT' ? 'PT' : 'YT'}`,
+      visibility: 'public_solana',
+      description: 'Escrow amounts are public on Solana (the price and limit are not)',
     },
     {
       label: 'Enclave Key ID',
@@ -103,35 +109,59 @@ export default function NewRfqPage() {
       wallet.setShowConnectModal(true)
       return
     }
+    if (!selectedSeries) {
+      alert('No open series on devnet to trade.')
+      return
+    }
 
     setIsSealing(true)
-    const newRoundId = Array.from({ length: 32 }, () =>
-      Math.floor(Math.random() * 256)
-        .toString(16)
-        .padStart(2, '0')
-    ).join('')
-    setRoundId(newRoundId)
-
     try {
-      // Step 1: Local Signing with connected Solana wallet
-      setSealingStepText('Step 1 of 3: Signing order with wallet private key...')
+      const assetMint = side === 'SellPT' ? selectedSeries.pt_mint : selectedSeries.yt_mint
+      const sizeRaw = BigInt(size)
 
+      // Step 1: make sure the asset being sold is escrowed (public on-chain; cannot be
+      // withdrawn before lock_until, so an approved fill cannot be starved).
+      setSealingStepText('Step 1 of 4: Locking asset in escrow (wallet signature)...')
+      const [escrowPda] = deriveEscrowPda(new PublicKey(selectedSeries.pubkey), wallet.publicKey, new PublicKey(assetMint))
+      const escrowAcc = await wallet.connection.getAccountInfo(escrowPda)
+      // Escrow layout: 8 disc + owner 32 + series 32 + mint 32 + lock_until i64 + amount u64
+      const escrowed = escrowAcc ? escrowAcc.data.readBigUInt64LE(8 + 96 + 8) : 0n
+      if (escrowed < sizeRaw) {
+        await lockEscrow(wallet, {
+          seriesPubkey: selectedSeries.pubkey,
+          mintPubkey: assetMint,
+          amount: (sizeRaw - escrowed).toString(),
+          lockUntilTs: Math.floor(Date.now() / 1000) + windowLengthSec + 900,
+          isToken2022: true,
+        })
+      }
+
+      // Step 2: the relay opens a round and assigns its id.
+      setSealingStepText('Step 2 of 4: Opening sealed round on relay...')
+      const roundRes = await fetch(`${RELAY_API_URL}/rfq/rounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ series: selectedSeries.pubkey, duration: windowLengthSec }),
+      })
+      const roundJson = await roundRes.json()
+      if (!roundRes.ok) throw new Error(roundJson.error ?? 'Relay refused to open a round')
+      const newRoundId: string = roundJson.round.round_id
+      setRoundId(newRoundId)
+
+      // Step 3: sign with the wallet and HPKE-seal in the browser.
+      setSealingStepText('Step 3 of 4: Signing and sealing order (HPKE RFC 9180)...')
       const payload = {
         v: 1,
         round_id: newRoundId,
-        series: selectedSeries?.pubkey || 'CSQJmtGu6s6KJ9wcfv8zY5LBioCnfcRenmFFB1pFPUwY',
+        series: selectedSeries.pubkey,
         side,
         size,
         limit_price: impliedPrice,
-        quote_mint: selectedSeries?.quote_mint || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        quote_mint: selectedSeries.quote_mint,
         requester: wallet.walletAddress,
         nonce: Date.now(),
-        not_after: Math.floor(Date.now() / 1000) + windowLengthSec,
+        not_after: Math.floor(Date.now() / 1000) + windowLengthSec + 600,
       }
-
-      // Step 2: Client-Side HPKE Sealing to Enclave Public Key
-      setSealingStepText('Step 2 of 3: HPKE (RFC 9180) sealing to Enclave Public Key...')
-
       const sealed = await sealOrderEnvelopeWithSigner(
         ENCLAVE_PUBLIC_KEY,
         newRoundId,
@@ -142,37 +172,23 @@ export default function NewRfqPage() {
         (msg) => wallet.signMessage(msg)
       )
 
-      // Step 3: Relay Routing (Ciphertext Only)
-      setSealingStepText('Step 3 of 3: Submitting sealed ciphertext to Relay (Zero Plaintext)...')
-
+      // Step 4: ciphertext only to the relay.
+      setSealingStepText('Step 4 of 4: Submitting ciphertext to relay...')
       const res = await fetch(`${RELAY_API_URL}/rfq/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          round_id: newRoundId,
-          series: payload.series,
-          duration: windowLengthSec,
-          enc: sealed.enc,
-          ciphertext: sealed.ciphertext,
-          kid: CURRENT_KID,
-        }),
-      }).catch((e) => {
-        throw new Error(`Relay connection failed: ${e.message}`)
+        body: JSON.stringify({ round_id: newRoundId, enc: sealed.enc, ciphertext: sealed.ciphertext, kid: CURRENT_KID }),
       })
+      if (!res.ok) throw new Error(`Relay rejected request: ${await res.text()}`)
 
-      if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(`Relay rejected request: ${errorText}`)
-      }
-
-      // Redirect to round status
       router.push(`/rfq/${newRoundId}`)
     } catch (err: any) {
       console.error('RFQ sealing/submission failed:', err)
-      alert(`RFQ Submission Failed: ${err.message || 'Unknown error'}`)
+      alert(`RFQ submission failed: ${err.message || 'Unknown error'}`)
       setIsSealing(false)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans">
@@ -249,63 +265,23 @@ export default function NewRfqPage() {
                   <div className="space-y-6">
                     <div>
                       <label className="font-mono text-xs text-[#a8a8a8] uppercase tracking-wider block mb-3">
-                        Select Risk-Tier Vault
+                        Series (open, on-chain)
                       </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setVaultTier('conservative')}
-                          className={`p-4 rounded-[3px] border text-left transition-all ${
-                            vaultTier === 'conservative'
-                              ? 'bg-[#0f1f14] border-[#4ade80] text-white shadow-[0_0_15px_-3px_rgba(74,222,128,0.3)]'
-                              : 'bg-[#0a0a0a] border-[#242424] text-[#a8a8a8] hover:border-[#404040]'
-                          }`}
+                      {openSeries.length === 0 ? (
+                        <p className="font-mono text-xs text-[#737373]">No open series found in the on-chain Registry.</p>
+                      ) : (
+                        <select
+                          value={selectedSeries?.pubkey ?? ''}
+                          onChange={(e) => setSeriesPick(e.target.value)}
+                          className="w-full bg-[#0a0a0a] border border-[#242424] rounded-[3px] p-3 font-mono text-xs text-white"
                         >
-                          <span className="text-[10px] font-mono text-[#4ade80] uppercase block mb-1 font-semibold">
-                            Tier 1
-                          </span>
-                          <span className="font-serif text-sm font-medium text-white block mb-1">
-                            Conservative
-                          </span>
-                          <span className="text-[11px] text-[#737373] block">Ondo USDY (4.85%)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setVaultTier('balanced')}
-                          className={`p-4 rounded-[3px] border text-left transition-all ${
-                            vaultTier === 'balanced'
-                              ? 'bg-[#1f190b] border-[#fbbf24] text-white shadow-[0_0_15px_-3px_rgba(251,191,36,0.3)]'
-                              : 'bg-[#0a0a0a] border-[#242424] text-[#a8a8a8] hover:border-[#404040]'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono text-[#fbbf24] uppercase block mb-1 font-semibold">
-                            Tier 2
-                          </span>
-                          <span className="font-serif text-sm font-medium text-white block mb-1">
-                            Balanced
-                          </span>
-                          <span className="text-[11px] text-[#737373] block">JitoSOL LST (7.12%)</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setVaultTier('alpha')}
-                          className={`p-4 rounded-[3px] border text-left transition-all ${
-                            vaultTier === 'alpha'
-                              ? 'bg-[#0b171c] border-[#22d3ee] text-white shadow-[0_0_15px_-3px_rgba(34,211,238,0.3)]'
-                              : 'bg-[#0a0a0a] border-[#242424] text-[#a8a8a8] hover:border-[#404040]'
-                          }`}
-                        >
-                          <span className="text-[10px] font-mono text-[#22d3ee] uppercase block mb-1 font-semibold">
-                            Tier 3
-                          </span>
-                          <span className="font-serif text-sm font-medium text-white block mb-1">
-                            Alpha
-                          </span>
-                          <span className="text-[11px] text-[#737373] block">Equities (3.40%)</span>
-                        </button>
-                      </div>
+                          {openSeries.map((s) => (
+                            <option key={s.pubkey} value={s.pubkey}>
+                              {s.pubkey.slice(0, 8)}… · matures {new Date(s.maturity_ts * 1000).toISOString().slice(0, 10)} · test collateral {s.collateral_mint.slice(0, 6)}…
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <div>
@@ -427,7 +403,7 @@ export default function NewRfqPage() {
                       <div className="flex justify-between">
                         <span className="text-[#a8a8a8]">Gross Quote Proceeds:</span>
                         <span className="text-white">
-                          ${(Number(size || '0') * Number(impliedPrice)).toLocaleString()} USDC
+                          {(Number(size || '0') * Number(impliedPrice)).toLocaleString()} quote units (raw)
                         </span>
                       </div>
                       <div className="flex justify-between pt-2 border-t border-[#1e1e1e]">
@@ -463,7 +439,7 @@ export default function NewRfqPage() {
                       <div className="flex justify-between">
                         <span className="text-[#a8a8a8]">Series:</span>
                         <span className="text-white truncate max-w-[200px]">
-                          {selectedSeries?.pubkey || 'CSQJ...FPUwY'}
+                          {selectedSeries?.pubkey ?? '—'}
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -480,7 +456,7 @@ export default function NewRfqPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-[#a8a8a8]">RFQ Window:</span>
-                        <span className="text-white">{windowLengthSec}s (5 minutes)</span>
+                        <span className="text-white">{windowLengthSec}s</span>
                       </div>
                     </div>
 
@@ -496,7 +472,7 @@ export default function NewRfqPage() {
                       <div className="p-4 bg-[#0c1f13] border border-[#1b4329] rounded-[2px] text-xs font-mono text-[#4ade80] flex items-start gap-2.5">
                         <Shield className="w-4 h-4 shrink-0 mt-0.5" />
                         <p className="leading-relaxed">
-                          Nothing leaves the browser in plain text. Your order is sealed directly to the hardware enclave public key using ChaCha20-Poly1305. The relay and node operators cannot read size, price, or identity.
+                          Nothing leaves the browser in plain text: the order is HPKE-sealed (RFC 9180, X25519 + ChaCha20-Poly1305) to the CRE workflow key. The relay sees only ciphertext and timing. On devnet the workflow runs in the CRE simulator, not a hardware enclave, and the team holds the decryption key.
                         </p>
                       </div>
                     )}

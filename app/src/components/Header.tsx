@@ -14,7 +14,7 @@ interface HeaderProps {
 
 export function Header({
   walletAddress: propWalletAddress,
-  userRole = 'Institutional Requester',
+  userRole,
   connectWallet: propConnectWallet,
 }: HeaderProps) {
   const pathname = usePathname()
@@ -24,7 +24,7 @@ export function Header({
 
   const navLinks = [
     { href: '/', label: 'Overview' },
-    { href: '/vaults', label: 'Vaults' },
+    { href: '/vaults', label: 'Series' },
     { href: '/rfq/new', label: 'Request Quote' },
     { href: '/dealer', label: 'Dealer Desk' },
     { href: '/portfolio', label: 'Portfolio' },
@@ -85,7 +85,7 @@ export function Header({
             <span className="text-[#a3a3a3]">Solana Devnet</span>
           </div>
 
-          {activeWalletAddress && (
+          {activeWalletAddress && userRole && (
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] bg-[#0c1f13]/80 border border-[#1b4329] text-[#4ade80] text-xs font-mono">
               <UserCheck className="w-3.5 h-3.5" />
               <span>{userRole}</span>

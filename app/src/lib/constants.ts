@@ -17,20 +17,14 @@ export const DEVNET_STAKE_POOL = 'HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f'
 export const RELAY_API_URL = process.env.NEXT_PUBLIC_RELAY_URL || 'http://localhost:3001'
 export const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || 'https://api.devnet.solana.com'
 
-// Published Enclave Public Key & Hash (transparently published per specification)
-// Derivation: priv = 32 bytes 0x77 -> pub = 1cf579aba45a10ba1d1ef06d91fca2aa9ed0a1150515653155405d0b18cb9a67
+// Published enclave HPKE public key (X25519) and its sha256, committed on-chain in
+// Config.enclave_key_hash via set_enclave_key_hash. Source: cre/enclave-public.json.
+// The matching secret lives only in the CRE secrets store (Vault DON when deployed; the
+// simulator's gitignored cre/.env on devnet). The team holds it, so the team can read orders.
 export const ENCLAVE_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_ENCLAVE_PUBKEY ||
-  '1cf579aba45a10ba1d1ef06d91fca2aa9ed0a1150515653155405d0b18cb9a67'
+  process.env.NEXT_PUBLIC_ENCLAVE_PUBKEY || '13780a391aacd9150125980ec19860e5ee6ba19736c0f39d1ed3ba0fb470df7d'
 export const ENCLAVE_KEY_HASH =
-  process.env.NEXT_PUBLIC_ENCLAVE_KEY_HASH ||
-  'a1ec4ad5c6a287e156ae4260c1602ffed192df3fd89c7b6376a268289bb7e703'
-export const CURRENT_KID = 'kid-2026-v1'
+  process.env.NEXT_PUBLIC_ENCLAVE_KEY_HASH || '67a4cdc66105d57fa748e4e05a1782e07b7496a4b2d4140438f32fe389a5694f'
+export const CURRENT_KID = 'kid-2026-10-07'
 
-// Pyth Network Hermes Oracle Integration
-export const PYTH_FEED_SOL_USD =
-  '0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d'
-export const PYTH_FEED_BTC_USD =
-  '0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43'
-export const PYTH_HERMES_URL = 'https://hermes.pyth.network'
-export const PYTH_API_KEY = process.env.NEXT_PUBLIC_PYTH_API_KEY || '3YPnj6f4uqyTnDwBkcMiQbL1wLbnz3Cvq4KxxceDpkZh'
+// Pyth display feeds live in ./pyth.ts (on-chain receiver accounts; optional Hermes key via env).

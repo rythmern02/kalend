@@ -22,6 +22,10 @@ import { fetchAllSeries } from '../../lib/api'
 import { useWallet } from '../../lib/wallet'
 import { sealOrderEnvelopeWithSigner } from '../../lib/crypto'
 import { ENCLAVE_PUBLIC_KEY, CURRENT_KID, RELAY_API_URL } from '../../lib/constants'
+import { PublicKey } from '@solana/web3.js'
+import { TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
+import { lockEscrow } from '../../lib/kalend-client'
+import { deriveEscrowPda } from '../../lib/solana'
 import { TiltCard } from '../../components/TiltCard'
 
 export default function DealerDeskPage() {
@@ -78,6 +82,31 @@ export default function DealerDeskPage() {
     setActionError(null)
 
     try {
+      const round = relayRounds.find((r: any) => r.round_id === selectedRound)
+      const series = allSeries?.find((s) => s.pubkey === round?.series)
+      if (!round || !series) throw new Error('Round series not found on-chain')
+
+      // Escrow the quote asset in a standard lot (multiple of 1.0 token at 6 dp), never the
+      // exact quote: the escrow amount is public and would otherwise leak an upper bound.
+      const priceMicros = BigInt(Math.round(Number(quotePrice) * 1_000_000))
+      const needed = (BigInt(quoteMaxSize) * priceMicros + 999_999n) / 1_000_000n
+      const LOT = 1_000_000n
+      const target = ((needed + LOT - 1n) / LOT) * LOT
+      const quoteMint = new PublicKey(series.quote_mint)
+      const mintInfo = await wallet.connection.getAccountInfo(quoteMint)
+      const [escrowPda] = deriveEscrowPda(new PublicKey(series.pubkey), wallet.publicKey, quoteMint)
+      const escrowAcc = await wallet.connection.getAccountInfo(escrowPda)
+      const escrowed = escrowAcc ? escrowAcc.data.readBigUInt64LE(8 + 96 + 8) : 0n
+      if (escrowed < target) {
+        await lockEscrow(wallet, {
+          seriesPubkey: series.pubkey,
+          mintPubkey: quoteMint,
+          amount: (target - escrowed).toString(),
+          lockUntilTs: round.window_end + 900,
+          isToken2022: mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID) ?? false,
+        })
+      }
+
       const payload = {
         v: 1,
         round_id: selectedRound,
@@ -85,7 +114,7 @@ export default function DealerDeskPage() {
         price: quotePrice,
         max_size: quoteMaxSize,
         nonce: Date.now(),
-        not_after: Math.floor(Date.now() / 1000) + 300,
+        not_after: round.window_end + 600,
       }
 
       const sealed = await sealOrderEnvelopeWithSigner(
@@ -141,14 +170,14 @@ export default function DealerDeskPage() {
               Dealer Desk
             </h1>
             <p className="text-sm text-[#a8a8a8] max-w-xl">
-              Competitive quote submission for authorized market makers. Sealed quotes are evaluated greedily in the Chainlink CRE enclave via knapsack waterfall matching.
+              Competitive quote submission for authorized market makers. Sealed quotes are decrypted only inside the Chainlink CRE workflow, which fills the request with the single best quote that meets its limit. Losing quotes never leave it.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4 font-mono text-xs shrink-0">
             <div className="p-3 bg-[#0a0a0a] border border-[#222222] rounded-[2px]">
               <span className="text-[#737373] block mb-1">Standard Escrow Lock</span>
-              <span className="text-[#4ade80] font-medium">5,000,000 USDC</span>
+              <span className="text-[#4ade80] font-medium">quote x size, rounded up to 1.0-token lots</span>
             </div>
             <div className="p-3 bg-[#0a0a0a] border border-[#222222] rounded-[2px]">
               <span className="text-[#737373] block mb-1">Fill Rate (30d)</span>
@@ -213,11 +242,11 @@ export default function DealerDeskPage() {
                 Escrow Status (Uniform Round Allocation)
               </span>
               <p className="text-[#737373] text-[11px] leading-relaxed">
-                Dealers lock a uniform standard round amount (5,000,000 USDC) rather than exact quote sizes, preventing size leakage to the relay or blockchain observers.
+                Dealers escrow the quote asset rounded up to whole 1.0-token lots rather than the exact quote, so the public escrow amount only reveals a coarse upper bound.
               </p>
               <div className="flex justify-between pt-2 border-t border-[#1e1e1e]">
                 <span className="text-[#a8a8a8]">Locked in Escrow:</span>
-                <span className="text-white">5,000,000 USDC</span>
+                <span className="text-white">rounded lot</span>
               </div>
             </div>
           </div>
@@ -231,7 +260,7 @@ export default function DealerDeskPage() {
                     Submit Sealed Quote
                   </h2>
                   <span className="font-mono text-[11px] px-2 py-0.5 rounded-[2px] bg-[#0c1f13] border border-[#1b4329] text-[#4ade80]">
-                    Chainlink CRE TEE Protected
+                    Sealed to CRE workflow key
                   </span>
                 </div>
 
@@ -249,7 +278,7 @@ export default function DealerDeskPage() {
                         className="w-full bg-[#121212] border border-[#2e2e2e] focus:border-white rounded-[2px] py-3.5 px-4 text-white text-base focus:outline-none transition-colors"
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#737373]">
-                        USDC / PT
+                        quote / asset
                       </span>
                     </div>
                   </div>
@@ -275,7 +304,7 @@ export default function DealerDeskPage() {
                     <div className="flex justify-between">
                       <span className="text-[#737373]">Maximum Capital Commitment:</span>
                       <span className="text-white font-medium">
-                        ${(Number(quoteMaxSize || '0') * Number(quotePrice || '0')).toLocaleString()} USDC
+                        {(Number(quoteMaxSize || '0') * Number(quotePrice || '0')).toLocaleString()} quote (raw)
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -292,7 +321,7 @@ export default function DealerDeskPage() {
                   className="w-full py-3.5 bg-white text-black font-semibold text-xs font-mono rounded-[2px] hover:bg-[#e6e6e6] transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.25)] flex items-center justify-center gap-2"
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Seal and Submit Quote ({quotePrice} USDC)</span>
+                  <span>Lock escrow, seal and submit quote @ {quotePrice}</span>
                 </button>
               </div>
             </TiltCard>

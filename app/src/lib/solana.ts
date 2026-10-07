@@ -58,3 +58,28 @@ export function calculateImpliedRate(price: number, daysLeft: number): number {
   if (price <= 0 || daysLeft <= 0) return 0
   return ((1 / price - 1) * 365) / daysLeft
 }
+
+/** Mint decimals (offset 44 in both SPL Token and Token-2022 mint layouts). */
+export async function getMintDecimals(conn: Connection, mint: PublicKey | string): Promise<number> {
+  const info = await conn.getAccountInfo(typeof mint === 'string' ? new PublicKey(mint) : mint)
+  if (!info || info.data.length < 45) throw new Error('Mint account not found')
+  return info.data[44]
+}
+
+/** Exact decimal string -> raw integer units (no floating point). */
+export function parseUnits(amount: string, decimals: number): bigint {
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(amount.trim())
+  if (!m) throw new Error(`Invalid amount: ${amount}`)
+  const frac = m[2] ?? ''
+  if (frac.length > decimals) throw new Error(`At most ${decimals} decimal places`)
+  const raw = BigInt(m[1]) * 10n ** BigInt(decimals) + BigInt(frac.padEnd(decimals, '0') || '0')
+  if (raw === 0n) throw new Error('Amount must be greater than zero')
+  return raw
+}
+
+export function formatUnits(raw: bigint | string | number, decimals: number): string {
+  const v = BigInt(raw)
+  const base = 10n ** BigInt(decimals)
+  const frac = (v % base).toString().padStart(decimals, '0').replace(/0+$/, '')
+  return frac ? `${v / base}.${frac}` : `${v / base}`
+}

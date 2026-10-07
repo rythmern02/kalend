@@ -15,6 +15,7 @@ import { fetchAllSeries } from '../../../../lib/api'
 import { VisibilityItem } from '../../../../lib/types'
 
 import { useWallet } from '../../../../lib/wallet'
+import { getMintDecimals, parseUnits } from '../../../../lib/solana'
 import { stripTokens, mergeTokens } from '../../../../lib/kalend-client'
 import { TiltCard } from '../../../../components/TiltCard'
 
@@ -36,7 +37,7 @@ export default function StripMergePage() {
     queryFn: fetchAllSeries,
   })
 
-  const series = allSeries?.find((s) => s.pubkey === seriesId) || allSeries?.[0]
+  const series = allSeries?.find((s) => s.pubkey === seriesId)
 
   const visibilityItems: VisibilityItem[] = [
     {
@@ -80,7 +81,7 @@ export default function StripMergePage() {
     setIsSubmitting(true)
     setActionError(null)
     try {
-      const parsedAmount = BigInt(Math.floor(Number(amount) * 1e9))
+      const parsedAmount = parseUnits(amount, await getMintDecimals(wallet.connection, series.collateral_mint))
       let txSig: string
       if (activeTab === 'strip') {
         txSig = await stripTokens(wallet, {

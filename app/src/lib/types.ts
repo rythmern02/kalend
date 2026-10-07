@@ -66,6 +66,7 @@ export const AllowEntrySchema = z.object({
 export type AllowEntry = z.infer<typeof AllowEntrySchema>
 
 export const FillReceiptSchema = z.object({
+  address: z.string(),
   round_id: z.string(),
   series: z.string(),
   requester: z.string(),
@@ -73,6 +74,7 @@ export const FillReceiptSchema = z.object({
   side: z.enum(['SellPT', 'SellYT']),
   asset_amount: z.string(),
   quote_amount: z.string(),
+  quote_mint: z.string(),
   ts: z.number(),
   report_hash: z.string(),
   status: z.enum(['Approved', 'Executed']),
@@ -91,12 +93,15 @@ export type PythFeedData = z.infer<typeof PythFeedDataSchema>
 export const RfqRoundStatusSchema = z.object({
   round_id: z.string(),
   series: z.string(),
-  status: z.enum(['open', 'matching', 'settled', 'expired', 'failed']),
+  kid: z.string(),
+  // open -> sealed (handed to CRE) -> approved (FillReceipt on-chain) -> executed; or no_match / failed
+  status: z.enum(['open', 'sealed', 'approved', 'executed', 'no_match', 'failed']),
+  window_end: z.number(),
+  created_at: z.number(),
   request_count: z.number(),
   quote_count: z.number(),
-  created_at: z.number(),
-  not_after: z.number(),
-  blended_rate: z.number().optional(),
   fill_receipt: z.string().optional(),
+  execute_tx: z.string().optional(),
+  error: z.string().optional(),
 })
 export type RfqRoundStatus = z.infer<typeof RfqRoundStatusSchema>

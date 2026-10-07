@@ -1,24 +1,8 @@
-import { x25519, ed25519 } from '@noble/curves/ed25519.js'
-import { chacha20poly1305 } from '@noble/ciphers/chacha.js'
-import { hkdf } from '@noble/hashes/hkdf.js'
+// Order sealing: HPKE RFC 9180 base mode (./hpke.ts) + domain-separated ed25519 wallet signature.
+import { ed25519 } from '@noble/curves/ed25519.js'
+import { hpkeSeal } from './hpke'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { utf8ToBytes, bytesToHex, hexToBytes, concatBytes } from '@noble/hashes/utils.js'
-
-export function hpkeSeal(
-  recipientPubKey: Uint8Array,
-  info: Uint8Array,
-  aad: Uint8Array,
-  plaintext: Uint8Array
-): { enc: Uint8Array; ciphertext: Uint8Array } {
-  const { secretKey: ephPriv, publicKey: ephPub } = x25519.keygen()
-  const sharedSecret = x25519.getSharedSecret(ephPriv, recipientPubKey)
-  const keyAndNonce = hkdf(sha256, sharedSecret, new Uint8Array(0), info, 44)
-  const key = keyAndNonce.subarray(0, 32)
-  const nonce = keyAndNonce.subarray(32, 44)
-  const cipher = chacha20poly1305(key, nonce, aad)
-  const ciphertext = cipher.encrypt(plaintext)
-  return { enc: ephPub, ciphertext }
-}
 
 export function signPayload(payloadStr: string, secretKey: Uint8Array, domainTag: string): Uint8Array {
   const digest = sha256(concatBytes(utf8ToBytes(domainTag), utf8ToBytes(payloadStr)))

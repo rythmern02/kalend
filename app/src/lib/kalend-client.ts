@@ -21,6 +21,7 @@ import {
 import {
   deriveAllowEntryPda,
   deriveEscrowPda,
+  deriveFillReceiptPda,
 } from './solana'
 import type { WalletContextValue } from './wallet'
 
@@ -576,5 +577,62 @@ export async function togglePauseGlobal(
     .instruction()
 
   const tx = new Transaction().add(ix)
+  return await wallet.sendTransaction(tx)
+}
+
+/**
+ * EXECUTE FILL: permissionless phase 2 of a two-phase fill. Anyone may send it; the program
+ * pays out only to the requester's and dealer's own token accounts named in the FillReceipt.
+ */
+export async function executeFill(wallet: WalletContextValue, roundIdHex: string): Promise<string> {
+  if (!wallet.publicKey) throw new Error('Please connect your wallet first')
+  const program = getAnchorProgram(wallet)
+  const [receiptPda] = deriveFillReceiptPda(Buffer.from(roundIdHex, 'hex'))
+  const receipt: any = await (program.account as any).fillReceipt.fetch(receiptPda)
+  if (receipt.status === 1) throw new Error('This fill was already executed')
+
+  const series: any = await (program.account as any).series.fetch(receipt.series)
+  const assetMint: PublicKey = receipt.side === 0 ? series.ptMint : series.ytMint
+  const quoteMint: PublicKey = receipt.quoteMint
+  const quoteMintInfo = await wallet.connection.getAccountInfo(quoteMint)
+  if (!quoteMintInfo) throw new Error('Quote mint not found')
+  const quoteProgram = quoteMintInfo.owner
+  const assetProgram = TOKEN_2022_PROGRAM_ID
+
+  const requester: PublicKey = receipt.requester
+  const dealer: PublicKey = receipt.dealer
+  const [reqEscrow] = deriveEscrowPda(receipt.series, requester, assetMint)
+  const [dlrEscrow] = deriveEscrowPda(receipt.series, dealer, quoteMint)
+  const requesterQuoteToken = getAssociatedTokenAddressSync(quoteMint, requester, false, quoteProgram)
+  const dealerAssetToken = getAssociatedTokenAddressSync(assetMint, dealer, false, assetProgram)
+
+  const ix = await program.methods
+    .executeFill()
+    .accountsStrict({
+      caller: wallet.publicKey,
+      requester,
+      dealer,
+      assetMint,
+      quoteMint,
+      assetTokenProgram: assetProgram,
+      quoteTokenProgram: quoteProgram,
+      fillReceipt: receiptPda,
+      series: receipt.series,
+      allowEntryRequester: deriveAllowEntryPda(requester)[0],
+      allowEntryDealer: deriveAllowEntryPda(dealer)[0],
+      requesterAssetEscrow: reqEscrow,
+      requesterAssetEscrowToken: getAssociatedTokenAddressSync(assetMint, reqEscrow, true, assetProgram),
+      dealerQuoteEscrow: dlrEscrow,
+      dealerQuoteEscrowToken: getAssociatedTokenAddressSync(quoteMint, dlrEscrow, true, quoteProgram),
+      requesterQuoteToken,
+      dealerAssetToken,
+    })
+    .instruction()
+
+  const tx = new Transaction().add(
+    createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, requesterQuoteToken, requester, quoteMint, quoteProgram),
+    createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, dealerAssetToken, dealer, assetMint, assetProgram),
+    ix
+  )
   return await wallet.sendTransaction(tx)
 }

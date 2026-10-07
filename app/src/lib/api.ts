@@ -6,11 +6,11 @@ import {
   SOLANA_RPC_URL,
   RELAY_API_URL,
   DEVNET_STAKE_POOL,
-  PYTH_HERMES_URL,
-  PYTH_API_KEY,
-  PYTH_FEED_SOL_USD,
-  PYTH_FEED_BTC_USD,
 } from './constants'
+import { fetchPythPrices, type PythSymbol } from './pyth'
+import { Program } from '@coral-xyz/anchor'
+import idl from './idl/kalend.json'
+import { deriveFillReceiptPda } from './solana'
 import {
   ConfigAccountSchema,
   ConfigAccount,
@@ -232,87 +232,27 @@ export async function fetchAllowEntry(walletAddress: string): Promise<AllowEntry
 }
 
 /**
- * Fetch Pyth reference rates (SOL/USD, BTC/USD) via Pyth Hermes API or on-chain Devnet accounts
+ * Pyth display price for one symbol. Reads the verified on-chain receiver account first;
+ * Hermes only if NEXT_PUBLIC_PYTH_API_KEY is configured. Never used in settlement math.
  */
-export async function fetchPythFeed(symbol: 'SOL/USD' | 'BTC/USD'): Promise<PythFeedData | null> {
-  // 1. Try Authenticated Pyth Hermes API
-  const feedIds: Record<string, string> = {
-    'SOL/USD': PYTH_FEED_SOL_USD,
-    'BTC/USD': PYTH_FEED_BTC_USD,
-  }
-
-  const feedId = feedIds[symbol]
-  if (feedId && PYTH_API_KEY) {
-    try {
-      const res = await fetch(
-        `${PYTH_HERMES_URL}/v2/updates/price/latest?ids[]=${feedId}&parsed=true`,
-        {
-          headers: {
-            Authorization: `Bearer ${PYTH_API_KEY}`,
-          },
-        }
-      )
-      if (res.ok) {
-        const json = await res.json()
-        const parsed = json.parsed?.[0]
-        if (parsed?.price) {
-          const price = Number(parsed.price.price) * Math.pow(10, parsed.price.expo)
-          const confidence = Number(parsed.price.conf) * Math.pow(10, parsed.price.expo)
-          const publishTime = Number(parsed.price.publish_time)
-
-          return PythFeedDataSchema.parse({
-            symbol,
-            price,
-            confidence,
-            publishTime,
-            source: 'Pyth Hermes Live Feed (Authenticated)',
-          })
-        }
-      }
-    } catch {
-      // Fall through to on-chain account fallback
-    }
-  }
-
-  // 2. Fallback: On-Chain Devnet Pyth Price Accounts
-  try {
-    const feedAddresses: Record<string, string> = {
-      'SOL/USD': 'J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix',
-      'BTC/USD': 'HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J',
-    }
-
-    const addr = feedAddresses[symbol]
-    if (!addr) return null
-
-    const acc = await connection.getAccountInfo(new PublicKey(addr))
-    if (!acc || acc.data.length < 240) return null
-
-    const data = acc.data
-    const priceRaw = Number(data.readBigInt64LE(208))
-    const confRaw = Number(data.readBigUInt64LE(216))
-    const expo = data.readInt32LE(20)
-    const publishTime = Number(data.readBigInt64LE(224))
-
-    const price = priceRaw * Math.pow(10, expo)
-    const confidence = confRaw * Math.pow(10, expo)
-
-    return PythFeedDataSchema.parse({
-      symbol,
-      price,
-      confidence,
-      publishTime,
-      source: 'Pyth Solana Devnet On-Chain',
-    })
-  } catch (err) {
-    return null
-  }
+export async function fetchPythFeed(symbol: PythSymbol): Promise<PythFeedData | null> {
+  const [p] = await fetchPythPrices(connection, [symbol])
+  if (!p) return null
+  return PythFeedDataSchema.parse({
+    symbol,
+    price: p.price,
+    confidence: p.conf,
+    publishTime: p.publishTime,
+    source: p.source === 'pyth-receiver-onchain' ? `Pyth receiver ${p.account}` : 'Pyth Hermes',
+  })
 }
 
 export interface StakePoolRateData {
   totalLamports: string
   poolTokenSupply: string
   exchangeRate: number
-  annualizedYieldPct: number
+  /** Growth of one pool token since the pool launched (not an annualized rate). */
+  growthSinceInceptionPct: number
   sourceAccount: string
   isLive: boolean
 }
@@ -337,15 +277,13 @@ export async function fetchLiveStakePoolRate(): Promise<StakePoolRateData | null
     const rateWad = (totalLamports * 1_000_000_000_000_000_000n) / poolTokenSupply
     const exchangeRate = Number(rateWad) / 1e18
 
-    // Devnet stake pools exhibit minimal movement; calculate exact delta
-    const delta = exchangeRate >= 1.0 ? exchangeRate - 1.0 : 0
-    const annualizedYieldPct = Math.max(0.01, Number((delta * 100).toFixed(4)))
+    const growthSinceInceptionPct = (exchangeRate - 1.0) * 100
 
     return {
       totalLamports: totalLamports.toString(),
       poolTokenSupply: poolTokenSupply.toString(),
       exchangeRate,
-      annualizedYieldPct,
+      growthSinceInceptionPct,
       sourceAccount: DEVNET_STAKE_POOL,
       isLive: true,
     }
@@ -356,30 +294,48 @@ export async function fetchLiveStakePoolRate(): Promise<StakePoolRateData | null
 }
 
 /**
- * Fetch RFQ Round Status from the Relay
+ * Fetch RFQ round status from the relay (scheduling state only; outcomes come from chain).
  */
 export async function fetchRfqRound(roundId: string): Promise<RfqRoundStatus | null> {
   try {
     const res = await fetch(`${RELAY_API_URL}/rfq/rounds/${roundId}`)
     if (!res.ok) return null
     const json = await res.json()
-    return RfqRoundStatusSchema.parse(json)
+    return RfqRoundStatusSchema.parse(json.round)
   } catch (err) {
     return null
   }
 }
 
-/**
- * Fetch FillReceipts from Relay or on-chain
- */
+function readOnlyProgram(): Program {
+  return new Program(idl as any, { connection } as any)
+}
+
+function toFillReceipt(address: PublicKey, r: any): FillReceipt {
+  return FillReceiptSchema.parse({
+    address: address.toBase58(),
+    round_id: Buffer.from(r.roundId).toString('hex'),
+    series: r.series.toBase58(),
+    requester: r.requester.toBase58(),
+    dealer: r.dealer.toBase58(),
+    side: r.side === 0 ? 'SellPT' : 'SellYT',
+    asset_amount: r.assetAmount.toString(),
+    quote_amount: r.quoteAmount.toString(),
+    quote_mint: r.quoteMint.toBase58(),
+    ts: Number(r.ts),
+    report_hash: Buffer.from(r.reportHash).toString('hex'),
+    status: r.status === 1 ? 'Executed' : 'Approved',
+  })
+}
+
+/** All FillReceipt accounts, read directly from Solana (no relay trust). */
 export async function fetchFillReceipts(): Promise<FillReceipt[]> {
-  try {
-    const res = await fetch(`${RELAY_API_URL}/rfq/receipts`)
-    if (!res.ok) return []
-    const json = await res.json()
-    if (!Array.isArray(json)) return []
-    return json.map((item) => FillReceiptSchema.parse(item))
-  } catch (err) {
-    return []
-  }
+  const all = await (readOnlyProgram().account as any).fillReceipt.all()
+  return all.map((a: any) => toFillReceipt(a.publicKey, a.account)).sort((a: FillReceipt, b: FillReceipt) => b.ts - a.ts)
+}
+
+export async function fetchFillReceipt(roundIdHex: string): Promise<FillReceipt | null> {
+  const [pda] = deriveFillReceiptPda(Buffer.from(roundIdHex, 'hex'))
+  const r = await (readOnlyProgram().account as any).fillReceipt.fetchNullable(pda)
+  return r ? toFillReceipt(pda, r) : null
 }

@@ -42,7 +42,7 @@ export function DataSourceTag({
         </>
       ) : null}
       {verified && (
-        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" title="Attested" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80]" title="Live source" />
       )}
     </div>
   )
