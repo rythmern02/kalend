@@ -22,6 +22,7 @@ module.exports = {
       },
       fontFamily: {
         pinyon: ['var(--font-pinyon)', 'cursive'],
+        hand: ['var(--font-hand)', 'cursive'],
         serif: ['var(--font-serif)', 'Georgia', 'serif'],
         sans: ['var(--font-sans)', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['var(--font-mono)', 'monospace'],

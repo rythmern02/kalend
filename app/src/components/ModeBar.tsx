@@ -37,11 +37,12 @@ export function ModeBar(_props: { state?: ModeBarState }) {
       return r.json()
     },
     refetchInterval: 15_000,
-    retry: false,
+    retry: 2,
   })
 
-  const cre = isError || !health
-    ? { v: 'Relay offline', tone: 'warn' as const }
+  // Keep the last good reading through a transient failed poll.
+  const cre = !health
+    ? { v: isError ? 'Relay offline' : 'checking…', tone: 'warn' as const }
     : health.cre?.mode === 'simulator'
       ? { v: 'Simulator (mock forwarder, not an enclave)', tone: 'warn' as const }
       : { v: 'Unavailable', tone: 'warn' as const }

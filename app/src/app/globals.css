@@ -186,3 +186,121 @@ body {
     linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
 }
+
+/* ───────────── Strip object (hero) ───────────── */
+.strip3d {
+  perspective: 1400px;
+  --rx: 0deg;
+  --ry: 0deg;
+}
+.strip3d-tilt {
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 300ms cubic-bezier(0, 0, 0.2, 1);
+}
+.strip3d-scene {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  transform-style: preserve-3d;
+  transform: rotateX(58deg) rotateZ(-38deg);
+}
+.strip3d-plate {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(2px);
+  transform-style: preserve-3d;
+}
+.strip3d-plate--base {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 40px 80px -20px rgba(0, 0, 0, 0.9);
+}
+.strip3d-plate--yt {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(251, 191, 36, 0.04));
+  border-color: rgba(251, 191, 36, 0.45);
+  transform: translateZ(70px);
+}
+.strip3d-plate--pt {
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.24), rgba(74, 222, 128, 0.04));
+  border-color: rgba(74, 222, 128, 0.5);
+  transform: translateZ(130px);
+}
+.strip3d-ring {
+  position: absolute;
+  inset: -46px;
+  transform: translateZ(-2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .strip3d-scene { animation: strip-sway 14s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate; }
+  .strip3d-plate--yt { animation: strip-yt 7s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+  .strip3d-plate--pt { animation: strip-pt 7s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+  .hand-underline path { stroke-dasharray: 420; stroke-dashoffset: 420; animation: hand-draw 900ms cubic-bezier(0, 0, 0.2, 1) 300ms forwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .strip3d-tilt { transition: none; }
+}
+
+/* gentle sway keeps the plate labels readable (a full orbit turns them upside down) */
+@keyframes strip-sway {
+  from { transform: rotateX(56deg) rotateZ(-46deg); }
+  to { transform: rotateX(60deg) rotateZ(-28deg); }
+}
+/* stacked (deposit) -> split (PT above YT) -> merged again */
+@keyframes strip-yt {
+  0%, 14% { transform: translateZ(14px); }
+  42%, 72% { transform: translateZ(70px); }
+  96%, 100% { transform: translateZ(14px); }
+}
+@keyframes strip-pt {
+  0%, 14% { transform: translateZ(22px); }
+  42%, 72% { transform: translateZ(130px); }
+  96%, 100% { transform: translateZ(22px); }
+}
+@keyframes hand-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ───────────── Depth cards ───────────── */
+.depth-card {
+  position: relative;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.8);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .depth-card { transition: transform 150ms cubic-bezier(0, 0, 0.2, 1), border-color 150ms cubic-bezier(0, 0, 0.2, 1); }
+  .depth-card:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.2); }
+}
+
+/* ───────────── Tilt cards ───────────── */
+.tilt-wrap { perspective: 1200px; }
+.tilt-card {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  --glare-x: 50%;
+  --glare-y: 50%;
+  background: linear-gradient(180deg, rgba(14, 14, 14, 0.92), rgba(8, 8, 8, 0.92));
+  backdrop-filter: blur(8px);
+}
+.tilt-card--glare::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at var(--glare-x) var(--glare-y), rgba(255, 255, 255, 0.08), transparent 55%);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tilt-card {
+    transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+    transition: transform 200ms cubic-bezier(0, 0, 0.2, 1), border-color 150ms cubic-bezier(0, 0, 0.2, 1);
+  }
+  .tilt-card:hover { transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); border-color: var(--tilt-accent); }
+  .tilt-card--glare::after { transition: opacity 150ms cubic-bezier(0, 0, 0.2, 1); }
+  .tilt-card--glare:hover::after { opacity: 1; }
+}
