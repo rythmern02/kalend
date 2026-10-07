@@ -81,22 +81,21 @@ export const onHttpTriggerInTee = (
   }
   const fill = result.fill
 
+  // 59-byte payload (CRE caps Solana reports at 265 bytes incl. forwarder metadata).
+  // Series, requester and dealer go in the account list, which the signed report hashes.
   const fillReport = {
     kind: 1,
     version: 1,
     roundId: Array.from(fill.roundId),
-    series: address(fill.series),
     side: fill.side,
-    requester: address(fill.requester),
-    dealer: address(fill.dealer),
     assetAmount: fill.assetAmount,
     quoteAmount: fill.quoteAmount,
-    quoteMint: address(fill.quoteMint),
     notAfter: BigInt(fill.notAfter),
   }
 
   // 4. Accounts for forwarder -> on_report (docs/REPORT_ACCOUNTS.md). The forwarder strips
-  //    [0] and [1]; on_report sees [config, series, fill_receipt, rent_vault, system].
+  //    [0] and [1]; on_report sees [config, series, fill_receipt, rent_vault, system,
+  //    requester, dealer].
   const forwarderAuthority = deriveForwarderAuthority(
     config.forwarderProgram,
     config.forwarderState,
@@ -111,6 +110,8 @@ export const onHttpTriggerInTee = (
     solanaAccountMeta(fillReceiptPda, true),
     solanaAccountMeta(config.rentVaultPda, true),
     solanaAccountMeta('11111111111111111111111111111111', false),
+    solanaAccountMeta(fill.requester, false),
+    solanaAccountMeta(fill.dealer, false),
   ]
 
   // 5. Cross back to the DON for consensus signing + Solana write. Only the fill leaves.

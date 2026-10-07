@@ -9,15 +9,15 @@ pub struct FillReport {
     pub kind: u8,            // 1
     pub version: u8,         // 1
     pub round_id: [u8; 32],
-    pub series: Pubkey,
     pub side: u8,            // 0 = SellPT, 1 = SellYT
-    pub requester: Pubkey,
-    pub dealer: Pubkey,
     pub asset_amount: u64,
     pub quote_amount: u64,
-    pub quote_mint: Pubkey,
     pub not_after: i64,
 }
+// 59 bytes. CRE caps a Solana report at 265 bytes including ~145 bytes of forwarder
+// metadata, so series, requester and dealer travel as receiver accounts instead: the
+// forwarder hashes the full account list into the DON-signed report, which authenticates
+// them exactly as the payload would. The quote mint is taken from the Series.
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SettleReport {
@@ -103,6 +103,9 @@ pub struct EscrowWithdrawn {
 #[event]
 pub struct ReceivedFillReport {
     pub report: FillReport,
+    pub series: Pubkey,
+    pub requester: Pubkey,
+    pub dealer: Pubkey,
     pub report_hash: [u8; 32],
 }
 

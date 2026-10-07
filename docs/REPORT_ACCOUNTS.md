@@ -20,35 +20,42 @@ The forwarder hashes the **entire** list into the report digest and re-verifies 
 
 ### 2.1 Kind 1: `FillReport` (Two-Phase Fill Authorization)
 
-#### Payload Structure (187 bytes Borsh)
+#### Payload Structure (59 bytes Borsh)
 ```rust
 pub struct FillReport {
-    pub kind: u8,            // Value = 1
-    pub version: u8,         // Value = 1
-    pub round_id: [u8; 32],  // Unique 32-byte round identifier (replay guard)
-    pub series: Pubkey,      // Target series PDA
+    pub kind: u8,            // 1
+    pub version: u8,         // 1
+    pub round_id: [u8; 32],  // replay guard: FillReceipt PDA ["fill", round_id]
     pub side: u8,            // 0 = SellPT, 1 = SellYT
-    pub requester: Pubkey,   // Requester wallet address
-    pub dealer: Pubkey,      // Winning dealer wallet address
-    pub asset_amount: u64,   // Quantity of PT or YT traded (raw units)
-    pub quote_amount: u64,   // Quantity of quote asset traded (raw units)
-    pub quote_mint: Pubkey,  // Mint of quote asset (wSOL or USDC)
-    pub not_after: i64,      // Unix timestamp expiration upper bound
+    pub asset_amount: u64,   // raw PT/YT units
+    pub quote_amount: u64,   // raw quote units
+    pub not_after: i64,      // upper bound only; on-chain Clock decides
 }
 ```
+
+Why this small: the CRE simulator enforces a 265-byte Solana report limit that mirrors production
+(`solana_report=265b`), and the forwarder wraps the payload in ~145 bytes of metadata plus the
+account hash. A 187-byte payload produced a 332-byte report and was rejected (2026-10-07). Series,
+requester and dealer therefore travel as receiver accounts: the forwarder hashes the whole account
+list into the DON-signed report, so they are authenticated exactly as payload fields would be. The
+quote mint is read from the Series.
 
 #### Forwarder Account Array (`remainingAccounts`)
 | Index | Account | Writable | Signer | Seed / Derivation |
 |---|---|---|---|---|
-| 0 | `forwarderState` | No | No | Chainlink Forwarder State |
-| 1 | `forwarderAuthority` | No | Yes (CPI) | `["forwarder", forwarderState, kalendProgram]` under `forwarderProgram` |
-| 2 | `config` | No | No | `["config"]` |
-| 3 | `series` | No | No | `series` pubkey (from payload) |
-| 4 | `fill_receipt` | Yes | No | `["fill", round_id]` |
+| 0 | `forwarderState` | No | No | Chainlink forwarder state (stripped before CPI) |
+| 1 | `forwarderAuthority` | No | Yes (CPI) | `["forwarder", forwarderState, kalendProgram]` under `forwarderProgram` (stripped) |
+| 2 | `config` | No | No | `["config"]`; on_report checks address, owner, discriminator |
+| 3 | `series` | No | No | Series PDA; owner + discriminator checked, must be Open and unmatured |
+| 4 | `fill_receipt` | Yes | No | `["fill", round_id]`; created with RentVault + PDA seeds |
 | 5 | `rent_vault` | Yes | No | `["rent"]` |
 | 6 | `system_program` | No | No | `11111111111111111111111111111111` |
+| 7 | `requester` | No | No | requester wallet |
+| 8 | `dealer` | No | No | dealer wallet |
 
-*Size budget*: 7 accounts $\times$ 32 bytes = 224 bytes. Total transaction payload footprint $\approx 661$ bytes (well below the 1232-byte MTU limit).
+Verified on devnet 2026-10-07: FillReceipt `Dt1wT66Ay2Xdz81VftMy9PHT4835nkZtYU6pewLEMbg3` written via
+the CRE mock forwarder (tx `4eBHtvNN1TMBEkR36yRCwqb9jNEsqmx8RYDu5DrM7Nm9rvBtWyEbABw2fwGz7jntZ6AzWiSsyeme2ocj6VDUMd5z`),
+executed by `2QHQ9KKK4mLdxjAT2GCRJZpxPX2YUmySteceoz4ZvLYxzoc4jQpLpcMVfirfgMMd6SWFcsPEUKGKejSKPs6Uiatb`.
 
 ---
 

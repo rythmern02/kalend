@@ -186,6 +186,9 @@ async function main() {
   console.log('\n✅ Sealed RFQ end-to-end on devnet: PASS')
 }
 
+// Public devnet RPC rate-limits background confirmation polling; log those instead of crashing.
+process.on('unhandledRejection', (e: any) => console.warn(`  (rpc) ${String(e?.message ?? e).slice(0, 80)}`))
+
 main().catch((e) => {
   console.error('\n❌ FAIL:', e.message ?? e)
   process.exit(1)

@@ -112,15 +112,22 @@ fn handle_fill_report(
         return err!(KalendError::RoundExpired);
     }
 
-    // Remaining accounts layout for FillReport:
+    // Remaining accounts layout for FillReport (all covered by the signed account hash):
     // [0]: config (read-only)
     // [1]: series (read-only)
     // [2]: fill_receipt (uninitialized PDA ["fill", round_id])
     // [3]: rent_vault (PDA ["rent"])
     // [4]: system_program
+    // [5]: requester wallet (read-only)
+    // [6]: dealer wallet (read-only)
     let remaining = ctx.remaining_accounts;
-    if remaining.len() < 5 {
+    if remaining.len() < 7 {
         return err!(KalendError::InvalidReportPayload);
+    }
+    let requester = remaining[5].key();
+    let dealer = remaining[6].key();
+    if requester == dealer {
+        return err!(KalendError::PartyMismatch);
     }
 
     let config_info = &remaining[0];
@@ -140,10 +147,7 @@ fn handle_fill_report(
         return err!(KalendError::InvalidForwarderProgram);
     }
 
-    // Verify series match, ownership and tradability (fills only for open, unmatured series)
-    if series_info.key() != report.series {
-        return err!(KalendError::SeriesMismatch);
-    }
+    // Verify series ownership and tradability (fills only for open, unmatured series)
     let series = load_series(series_info)?;
     if series.status != SeriesStatus::Open as u8 {
         return err!(KalendError::SeriesNotOpen);
@@ -151,8 +155,8 @@ fn handle_fill_report(
     if now >= series.maturity_ts {
         return err!(KalendError::SeriesAlreadyMatured);
     }
-    if report.quote_mint != series.quote_mint {
-        return err!(KalendError::TokenMismatch);
+    if report.side > 1 {
+        return err!(KalendError::InvalidReportPayload);
     }
     if report.asset_amount == 0 || report.quote_amount == 0 {
         return err!(KalendError::ZeroAmount);
@@ -196,7 +200,8 @@ fn handle_fill_report(
             fill_receipt_info.clone(),
             system_program_info.clone(),
         ],
-        &[rent_vault_seeds],
+        // Both the payer (RentVault) and the new account (FillReceipt PDA) must sign create_account.
+        &[rent_vault_seeds, &[FillReceipt::SEED, report.round_id.as_ref(), &[receipt_bump]]],
     )?;
 
     // Calculate report hash
@@ -205,13 +210,13 @@ fn handle_fill_report(
     // Write FillReceipt state
     let receipt = FillReceipt {
         round_id: report.round_id,
-        series: report.series,
-        requester: report.requester,
-        dealer: report.dealer,
+        series: series_info.key(),
+        requester,
+        dealer,
         side: report.side,
         asset_amount: report.asset_amount,
         quote_amount: report.quote_amount,
-        quote_mint: report.quote_mint,
+        quote_mint: series.quote_mint,
         ts: now,
         report_hash,
         status: FillStatus::Approved as u8,
@@ -226,6 +231,9 @@ fn handle_fill_report(
 
     emit!(ReceivedFillReport {
         report,
+        series: series_info.key(),
+        requester,
+        dealer,
         report_hash,
     });
 
@@ -388,7 +396,7 @@ fn handle_rate_report(
                 rate_record_info.clone(),
                 system_program_info.clone(),
             ],
-            &[rent_vault_seeds],
+            &[rent_vault_seeds, &[RateRecord::SEED, report.benchmark_id.as_ref(), &[record_bump]]],
         )?;
     }
 

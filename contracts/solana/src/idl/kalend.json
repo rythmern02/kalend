@@ -2884,20 +2884,8 @@
             }
           },
           {
-            "name": "series",
-            "type": "pubkey"
-          },
-          {
             "name": "side",
             "type": "u8"
-          },
-          {
-            "name": "requester",
-            "type": "pubkey"
-          },
-          {
-            "name": "dealer",
-            "type": "pubkey"
           },
           {
             "name": "asset_amount",
@@ -2906,10 +2894,6 @@
           {
             "name": "quote_amount",
             "type": "u64"
-          },
-          {
-            "name": "quote_mint",
-            "type": "pubkey"
           },
           {
             "name": "not_after",
@@ -3062,6 +3046,18 @@
                 "name": "FillReport"
               }
             }
+          },
+          {
+            "name": "series",
+            "type": "pubkey"
+          },
+          {
+            "name": "requester",
+            "type": "pubkey"
+          },
+          {
+            "name": "dealer",
+            "type": "pubkey"
           },
           {
             "name": "report_hash",

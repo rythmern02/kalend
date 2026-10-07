@@ -125,8 +125,13 @@ async function closeAndTrigger(roundId: string) {
 
   if (result.status === 'no_match') {
     store.updateRoundStatus(roundId, 'no_match', { error: `No fill: ${result.reason}` })
-  } else if (result.status === 'written' && result.success) {
+  } else if (result.status === 'written') {
+    // The CLI's confirmation can time out under RPC rate limits even when the write landed,
+    // so the FillReceipt account decides; mark failed only if it never appears.
     await watchForReceipt(roundId)
+    if (!(await chain.getFillReceipt(roundId).catch(() => null))) {
+      store.updateRoundStatus(roundId, 'failed', { error: `No FillReceipt on-chain (CRE tx_status ${result.tx_status})` })
+    }
   } else {
     store.updateRoundStatus(roundId, 'failed', { error: result.error || result.status })
   }
