@@ -33,6 +33,7 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const idl = JSON.parse(fs.readFileSync(path.join(root, 'target/idl/kalend.json'), 'utf8'))
 const enclave = JSON.parse(fs.readFileSync(path.join(root, 'cre/enclave-public.json'), 'utf8'))
 
+const STAKE_POOL = new PublicKey('HUnwAcgmfZf5x9BTKFuzXPqUna43xnz9ZZkbxNB7g66f')
 const ROLES = { STRIP: 1, REDEEM: 2, CLAIM: 4, REQUESTER: 8, DEALER: 16 }
 const conn = new Connection(RPC, 'confirmed')
 const authority = Keypair.fromSecretKey(
@@ -104,7 +105,9 @@ async function main() {
   const series = pda(Buffer.from('series'), collateralMint.toBuffer(), mBuf, nBuf)
   const pt = Keypair.generate(), yt = Keypair.generate()
   tx('open_series', await admin.methods
-    .openSeries(new BN(maturityTs), nonce, 0, PublicKey.default, new BN('1000000000000000000'), 0, 2000, 0, false)
+    // StakePoolRate: idx_open is read by the program from the devnet SPL stake pool (the 1.0
+    // argument is ignored for this index kind).
+    .openSeries(new BN(maturityTs), nonce, 0, STAKE_POOL, new BN('1000000000000000000'), 0, 2000, 0, false)
     .accountsPartial({
       config: configPda, registry: registryPda, series, collateralMint, collateralTokenProgram: TOKEN_PROGRAM_ID,
       quoteMint, ptMint: pt.publicKey, ytMint: yt.publicKey,
@@ -112,6 +115,7 @@ async function main() {
       authority: authority.publicKey, token2022Program: TOKEN_2022_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     })
+    .remainingAccounts([{ pubkey: STAKE_POOL, isSigner: false, isWritable: false }])
     .signers([pt, yt]).rpc())
   console.log(`  series ${series.toBase58()}`)
 

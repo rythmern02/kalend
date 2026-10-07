@@ -108,6 +108,18 @@ pub fn open_series_handler(
     if maturity_ts <= now {
         return err!(KalendError::MaturityInPast);
     }
+    // StakePoolRate series take idx_open from the pool itself (passed as the first remaining
+    // account), never from the authority: an authority-chosen idx_open below the live rate
+    // would hand YT holders growth that happened before the series existed.
+    let idx_open = if index_kind == IndexKind::StakePoolRate as u8 {
+        let pool = ctx.remaining_accounts.first().ok_or(error!(KalendError::InvalidIndex))?;
+        if pool.key() != index_source {
+            return err!(KalendError::InvalidIndex);
+        }
+        crate::instructions::settle_onchain::stake_pool_rate_wad(pool)?
+    } else {
+        idx_open
+    };
     if idx_open == 0 {
         return err!(KalendError::InvalidIndex);
     }

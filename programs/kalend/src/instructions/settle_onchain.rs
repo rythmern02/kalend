@@ -39,36 +39,7 @@ pub fn settle_onchain_handler(ctx: Context<SettleOnchain>) -> Result<()> {
         return err!(KalendError::SeriesMaturityNotReached);
     }
 
-    let pool_info = &ctx.accounts.index_source;
-    // Verify stake pool owner
-    if pool_info.owner != &SPL_STAKE_POOL_PROGRAM_ID {
-        return err!(KalendError::InvalidIndex);
-    }
-
-    let data = pool_info.try_borrow_data()?;
-    // SPL Stake Pool binary layout:
-    // Offset 258: total_lamports (u64, little-endian)
-    // Offset 266: pool_token_supply (u64, little-endian)
-    if data.len() < 274 {
-        return err!(KalendError::InvalidIndex);
-    }
-
-    let total_lamports = u64::from_le_bytes(
-        data[258..266].try_into().map_err(|_| error!(KalendError::InvalidIndex))?,
-    );
-    let pool_token_supply = u64::from_le_bytes(
-        data[266..274].try_into().map_err(|_| error!(KalendError::InvalidIndex))?,
-    );
-
-    if pool_token_supply == 0 {
-        return err!(KalendError::InvalidIndex);
-    }
-
-    let idx_settle = (total_lamports as u128)
-        .checked_mul(WAD)
-        .ok_or(error!(KalendError::MathOverflow))?
-        .checked_div(pool_token_supply as u128)
-        .ok_or(error!(KalendError::MathOverflow))?;
+    let idx_settle = stake_pool_rate_wad(&ctx.accounts.index_source.to_account_info())?;
 
     series.idx_settle = idx_settle;
     series.split_num = 1;
@@ -91,4 +62,32 @@ pub fn settle_onchain_handler(ctx: Context<SettleOnchain>) -> Result<()> {
     });
 
     Ok(())
+}
+
+/// Exchange rate of one SPL stake-pool token in WAD: total_lamports / pool_token_supply.
+/// Shared by open_series (idx_open) and settle_onchain (idx_settle) so both ends of a
+/// series' term come from the same on-chain source.
+pub fn stake_pool_rate_wad(pool_info: &AccountInfo) -> Result<u128> {
+    if pool_info.owner != &SPL_STAKE_POOL_PROGRAM_ID {
+        return err!(KalendError::InvalidIndex);
+    }
+    let data = pool_info.try_borrow_data()?;
+    // SPL Stake Pool layout: total_lamports @258 (u64 LE), pool_token_supply @266 (u64 LE)
+    if data.len() < 274 {
+        return err!(KalendError::InvalidIndex);
+    }
+    let total_lamports = u64::from_le_bytes(
+        data[258..266].try_into().map_err(|_| error!(KalendError::InvalidIndex))?,
+    );
+    let pool_token_supply = u64::from_le_bytes(
+        data[266..274].try_into().map_err(|_| error!(KalendError::InvalidIndex))?,
+    );
+    if pool_token_supply == 0 {
+        return err!(KalendError::InvalidIndex);
+    }
+    (total_lamports as u128)
+        .checked_mul(WAD)
+        .ok_or(error!(KalendError::MathOverflow))?
+        .checked_div(pool_token_supply as u128)
+        .ok_or(error!(KalendError::MathOverflow))
 }
