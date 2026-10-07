@@ -31,9 +31,25 @@ const CRE_ROOT = process.env.CRE_PROJECT_ROOT || path.resolve(here, '../../cre')
 const CRE_BIN = process.env.CRE_BIN || path.join(os.homedir(), '.cre/bin/cre')
 const SIM_TIMEOUT_MS = 5 * 60 * 1000
 
-export function creMode(): { mode: 'simulator' | 'unavailable'; reason?: string } {
+let authCache: { ok: boolean; at: number } | null = null
+
+/** `cre whoami` (cached 60s): simulation needs a logged-in CLI or CRE_API_KEY. */
+function creAuthenticated(): Promise<boolean> {
+  if (authCache && Date.now() - authCache.at < 60_000) return Promise.resolve(authCache.ok)
+  return new Promise((resolve) => {
+    const child = spawn(CRE_BIN, ['whoami'], { cwd: CRE_ROOT, env: process.env })
+    child.on('close', (code) => {
+      authCache = { ok: code === 0, at: Date.now() }
+      resolve(code === 0)
+    })
+    child.on('error', () => resolve(false))
+  })
+}
+
+export async function creMode(): Promise<{ mode: 'simulator' | 'unavailable'; reason?: string }> {
   if (!fs.existsSync(CRE_BIN)) return { mode: 'unavailable', reason: `CRE CLI not found at ${CRE_BIN}` }
   if (!fs.existsSync(path.join(CRE_ROOT, '.env'))) return { mode: 'unavailable', reason: 'cre/.env missing' }
+  if (!(await creAuthenticated())) return { mode: 'unavailable', reason: 'CRE CLI not logged in (run cre login)' }
   return { mode: 'simulator' }
 }
 
@@ -65,7 +81,7 @@ export function triggerRfqWorkflow(bundle: RoundBundle): Promise<TriggerResult> 
 }
 
 async function runSimulator(bundle: RoundBundle): Promise<TriggerResult> {
-  const m = creMode()
+  const m = await creMode()
   if (m.mode !== 'simulator') {
     return { success: false, status: 'not_configured', round_id: bundle.round_id, error: m.reason }
   }

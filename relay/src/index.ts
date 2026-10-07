@@ -60,8 +60,8 @@ function view(r: RfqRound) {
   }
 }
 
-app.get('/health', (c) => {
-  const cre = creMode()
+app.get('/health', async (c) => {
+  const cre = await creMode()
   return c.json({
     status: cre.mode === 'simulator' ? 'ok' : 'degraded',
     service: 'kalend-relay',
@@ -230,5 +230,5 @@ app.get('/rfq/events', () => {
 })
 
 const port = Number(process.env.PORT || process.env.RELAY_PORT) || 3001
-console.log(`[relay] listening on :${port} · CRE ${creMode().mode} · program ${chain.programId.toBase58()}`)
+creMode().then((m) => console.log(`[relay] listening on :${port} · CRE ${m.mode}${m.reason ? ` (${m.reason})` : ''} · program ${chain.programId.toBase58()}`))
 serve({ fetch: app.fetch, port })
