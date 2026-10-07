@@ -1,9 +1,9 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Wallet, ShieldCheck, UserCheck, LogOut } from 'lucide-react'
+import { Wallet, UserCheck, LogOut, Menu, X } from 'lucide-react'
 import { useWallet } from '../lib/wallet'
 
 interface HeaderProps {
@@ -21,6 +21,9 @@ export function Header({
   const wallet = useWallet()
   const activeWalletAddress = propWalletAddress !== undefined ? propWalletAddress : wallet.walletAddress
   const onConnect = propConnectWallet || wallet.connect
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => setMenuOpen(false), [pathname])
+  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
   const navLinks = [
     { href: '/', label: 'Overview' },
@@ -34,14 +37,13 @@ export function Header({
   ]
 
   return (
-    <header className="border-b border-white/10 bg-black/80 backdrop-blur-xl sticky top-0 z-40 transition-all">
+    <header className="border-b border-white/10 bg-black/70 backdrop-blur-xl sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Wordmark */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-baseline gap-2 group">
             <span
-              className="text-3xl text-white font-normal tracking-normal select-none group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.4)] transition-all"
-              style={{ fontFamily: "'Pinyon Script', cursive" }}
+              className="font-pinyon text-3xl text-white font-normal tracking-normal select-none"
             >
               Kalend
             </span>
@@ -53,22 +55,19 @@ export function Header({
           {/* Navigation Links */}
           <nav className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => {
-              const isActive =
-                link.href === '/'
-                  ? pathname === '/'
-                  : pathname.startsWith(link.href)
+              const active = isActive(link.href)
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`relative px-3 py-1.5 rounded-[3px] text-xs font-sans transition-all duration-150 ${
-                    isActive
+                  className={`relative px-3 py-1.5 rounded-[3px] text-xs font-sans transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                    active
                       ? 'text-white bg-white/10 font-medium border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.06)]'
                       : 'text-[#a3a3a3] hover:text-white hover:bg-white/5'
                   }`}
                 >
                   {link.label}
-                  {isActive && (
+                  {active && (
                     <span className="absolute bottom-[-1px] left-2 right-2 h-[1px] bg-gradient-to-r from-transparent via-[#4ade80] to-transparent" />
                   )}
                 </Link>
@@ -81,7 +80,7 @@ export function Header({
         <div className="flex items-center gap-3">
           {/* Live Cluster Badge */}
           <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-[2px] bg-black/60 border border-white/10 text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] motion-safe:animate-pulse" />
             <span className="text-[#a3a3a3]">Solana Devnet</span>
           </div>
 
@@ -94,8 +93,17 @@ export function Header({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-nav"
+              className="lg:hidden p-2.5 rounded-[3px] border border-white/15 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              {menuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+            <button
               onClick={onConnect}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-[3px] text-xs font-mono border border-white/15 hover:border-white bg-[#0f0f0f] hover:bg-[#141414] text-white shadow-sm transition-all"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-[3px] text-xs font-mono border border-white/15 hover:border-white bg-[#0f0f0f] hover:bg-[#141414] text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               <Wallet className="w-3.5 h-3.5 text-[#a8a8a8]" />
               {activeWalletAddress ? (
@@ -110,7 +118,8 @@ export function Header({
             {activeWalletAddress && (
               <button
                 onClick={wallet.disconnect}
-                title="Disconnect Wallet"
+                title="Disconnect wallet"
+                aria-label="Disconnect wallet"
                 className="p-1.5 rounded-[3px] border border-[#2b2b2b] hover:border-[#f87171] text-[#737373] hover:text-[#f87171] bg-[#0a0a0a] transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -119,6 +128,22 @@ export function Header({
           </div>
         </div>
       </div>
+      {menuOpen && (
+        <nav id="mobile-nav" className="lg:hidden border-t border-white/10 bg-black/95 px-4 py-3 grid grid-cols-2 gap-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={isActive(link.href) ? 'page' : undefined}
+              className={`px-3 py-3 rounded-[3px] text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                isActive(link.href) ? 'bg-white/10 text-white' : 'text-[#b5b5b5] hover:text-white hover:bg-white/5'
+              }`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   )
 }
