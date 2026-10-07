@@ -1,7 +1,39 @@
 # KALEND PROJECT STATUS
-Last Updated: 2026-10-03 · Version 1.1
+Last Updated: 2026-10-07
 
-## Overall Status: Production-Ready & Verified On Solana Devnet (T0 & T1 100% Complete)
+## Overall status: devnet build, end-to-end flows verified; not audited, not mainnet-ready
+
+### Verified on devnet 2026-10-07 (program upgraded in place, same ID)
+- Sealed RFQ end to end, from the browser UI: strip -> sealed request -> sealed quote -> relay
+  (ciphertext only) -> `cre workflow simulate --broadcast` -> mock forwarder -> `on_report`
+  FillReceipt -> `execute_fill`. Round `cb3ea7d0…`: 1.0 PT for 0.997 quote. Also scripted:
+  `scripts/e2e_rfq_devnet.ts` (FillReceipt `Dt1wT66A…`, tx `4eBHtvNN…`, execute `2QHQ9KKK…`).
+  These were the first FillReceipts ever written on devnet; the earlier "passed" RFQ test
+  never touched the chain.
+- Settlement: `scripts/test_settlement_flow.js` (settle_onchain reads the pool, PT gets full
+  principal, YT gets 0 because no epoch was crossed, INV1 holds).
+- Pyth display prices from Pyth receiver accounts on devnet (owner + feed id checked).
+
+### Fixed in this pass (see git log on fix/devnet-hardening)
+- on_report trusted an unchecked Config account (forged fills / settlements possible).
+- execute_fill let any caller choose the destination token accounts.
+- open_series took idx_open from the authority (YT credited with pre-series growth).
+- FillReport exceeded CRE's 265-byte Solana report limit; create_account lacked PDA signer.
+- "HPKE" was not RFC 9180; enclave key was derived from 0x77*32; the relay decrypted orders
+  and faked execute_fill signatures; workflows trapped in the CRE WASM runtime.
+- UI showed fabricated APYs, vaults, receipts and balances; now everything shown is read live.
+
+### Not done / limits
+- CRE: account has no Deploy Access or Confidential Workflows enrollment, so both workflows
+  run in the simulator (mock forwarder). The live Keystone path is configured but unexercised.
+- The team holds the enclave key; attestation is not user-verifiable.
+- `kalend-oracle` (benchmark / OracleIndex settle) was not re-run in this pass.
+- No LiteSVM integration tests for the new on_report / execute_fill checks yet (unit tests only).
+- No external audit.
+
+---
+
+## Earlier notes (2026-10-03, superseded: several claims below were not accurate)
 
 ---
 

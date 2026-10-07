@@ -30,8 +30,8 @@ export default function MaturityRedeemPage() {
   const modeBarState = useModeBarState()
   const wallet = useWallet()
 
-  const [redeemPtAmount, setRedeemPtAmount] = useState<string>('1000')
-  const [claimYtAmount, setClaimYtAmount] = useState<string>('1000')
+  const [redeemPtAmount, setRedeemPtAmount] = useState<string>('1')
+  const [claimYtAmount, setClaimYtAmount] = useState<string>('1')
   const [activeModal, setActiveModal] = useState<'pt' | 'yt' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
