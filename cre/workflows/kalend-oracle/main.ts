@@ -298,6 +298,3 @@ export async function main() {
   await runner.run(initWorkflow)
 }
 
-if (process.argv[1] && process.argv[1].endsWith('main.ts')) {
-  main()
-}
